@@ -2,26 +2,20 @@
 
 ## Product shape
 
-Open Notch is two desktop windows with separate jobs:
+Open Notch has two separate Python apps:
 
-- `notch.py` is the script library and editor. It is a normal macOS window with the native title bar, resizing, and familiar window behavior.
-- `prompter.py` is a separate process launched by the library. It is a compact, frameless floating surface that stays near the camera while the user presents.
+- `notch.py` is the script library and editor. It keeps a normal macOS title bar and familiar window behavior.
+- `prompter.py` is a separate, frameless presenter process. It stays near the camera and gives the script the entire visual focus.
 
-The library should feel like a quiet writing studio. The prompter should feel like a soft, luminous glass island. Keep the editor calm so the floating surface remains the memorable part of the product.
+The library is a quiet dark workspace. The presenter is a black, blue-lit capsule: long, spare, and readable at a glance. It should feel native to Open Notch instead of looking like a reskinned reference mockup.
 
-## Visual references
+## Originality rule
 
-Use the three supplied references as the source for the prompter's shape and hierarchy:
+Treat supplied images as mood cues only. Never copy their exact layout, proportions, icon placement, or component cluster. In particular, the presenter must not reproduce the close/camera/microphone/settings row from the references. Open Notch's presenter uses no visible buttons; keyboard controls and a small status line provide its controls.
 
-- A large, deeply rounded capsule with a pale pearl surface and a cool blue edge glow.
-- Large, high-contrast script text with the spoken portion receding to soft gray.
-- A compact top control row: close on the left; camera status, microphone status, and settings on the right.
-- A small audio activity/status cue below the script. Use a faint green accent only for an active or ready state.
-- The compact state is a short pill. Expansion grows smoothly into the reading surface without changing its visual language.
+## Palette
 
-Do not copy decorative browser chrome from the references. Keep the prompter free of a native title bar, Dock presence, and unnecessary labels.
-
-## Tokens
+Return to Open Notch's original ink-and-blue identity:
 
 | Purpose | Value |
 | --- | --- |
@@ -30,33 +24,33 @@ Do not copy decorative browser chrome from the references. Keep the prompter fre
 | Library editor surface | `#12161B` |
 | Primary text | `#F5F5F7` |
 | Muted text | `#929BA5` |
-| Open Notch accent | `#5AB8F7` |
-| Prompter pearl | `#F4F5F2` |
-| Prompter script | `#171B1D` |
-| Spoken text | `#A1A8AA` |
-| Prompter blue edge | `#83BFFF` |
-| Active audio green | `#82DCA0` |
+| Open Notch blue | `#4B91D5` |
+| Presenter surface | `#000000` |
+| Presenter script | `#FFFFFF` |
+| Spoken script | `#6B6B6B` |
+| Current word and edge | `#4B91D5` |
 
-Use Avenir Next for the library's display and interface text. Use a system sans face for dense utility labels and the prompter body. The script should stay visually dominant.
+Keep the blue restrained: it marks the active word, voice-following state, and a faint capsule edge. Do not introduce the reference's pearl surface or green state color.
+
+## Typography and shape
+
+- Use Avenir Next for library headings, editor content, and the presenter script. Use only Tk-supported `normal` and `bold` weights.
+- Use Helvetica Neue for small status text.
+- Set the presenter script large and regular, with generous line spacing. The script is the only large element in the capsule.
+- Keep the presenter strongly rounded, with a corner radius equal to half its height. The silhouette should read as a single horizontal pill, not a card.
+- Use a fine blue edge and soft native shadow when AppKit is available. The presenter remains borderless without optional native styling.
 
 ## Layout and behavior
 
-- Keep the library's native title bar. Use a clear two-column library/editor layout, one strong primary action, and restrained secondary actions.
-- Keep the floating prompter borderless and topmost. Drag from its surface, close from the left control, and keep voice-following/manual controls reachable without obscuring the script.
-- Controls must represent working behavior. The microphone control toggles voice following. Settings exposes existing text-size and panel-size preferences. The camera symbol is a status indicator only; Open Notch does not access a camera.
-- Preserve keyboard shortcuts and the existing script-following behavior.
-- Save notes locally and launch a selected note as a separate `prompter.py` process. Closing the library must not implicitly close an already launched prompter.
-- Keep spacing generous, corners strongly rounded on the prompter, and borders/shadows soft. Avoid hard black panels, heavy dividers, gradients with saturated color, and control rows that compete with the script.
+- Keep the library's title bar, two-column script/editor layout, and clear launch action.
+- Keep the presenter topmost, draggable, and separate from the library process. Closing the library does not close an already running presenter.
+- The presenter contains only script text and a compact status/audio cue. Show no camera, microphone, close, or settings buttons.
+- Preserve keyboard controls: Space pauses/resumes, Up/Down nudges, R restarts, plus/minus changes text size, bracket keys change panel height, and Q/Esc closes.
+- Preserve local speech following and script persistence. Open Notch uses the microphone for voice following and never accesses the camera.
+- Retain the short ease-out expansion from a compact pill into the reading capsule.
 
-## Motion and states
+## Resilience
 
-- Use the existing short ease-out expansion from a compact pill to the reading panel.
-- Use a restrained blue glow while idle and a quiet green accent while the microphone is active.
-- Keep pause, following, error, and end-of-script states legible without moving the script unexpectedly.
-
-## Accessibility and resilience
-
-- Give icon controls tooltips and accessible text labels where Tk supports them.
-- Preserve keyboard equivalents for close, pause/resume, restart, nudge, and text sizing.
-- The main launcher must remain usable when optional AppKit styling is unavailable. The prompter must still be frameless; optional native masking may enhance its corners and shadow.
-- Do not make camera access, recording, cloud services, or unrelated product features appear available when they are not implemented.
+- Keep notes on-device and launch a saved note as a separate `prompter.py` process by note ID.
+- Show useful startup errors from the presenter process in the launcher instead of silently swallowing them.
+- Keep the launcher usable when AppKit styling is unavailable. Do not suggest that recording, camera access, or cloud features exist.

@@ -18,7 +18,8 @@ BG = "#090B0E"
 SIDEBAR = "#101318"
 PANEL = "#12161B"
 MUTED = "#929BA5"
-ACCENT = "#5AB8F7"
+ACCENT = "#4B91D5"
+PROMPTER_LOG = NOTES_FILE.parent / "prompter.log"
 
 
 class NotchHome:
@@ -59,7 +60,7 @@ class NotchHome:
         sidebar.pack(side="left", fill="y")
         sidebar.pack_propagate(False)
         tk.Label(
-            sidebar, text="OPEN NOTCH", bg=SIDEBAR, fg="#F5F5F7",
+            sidebar, text="OPEN NOTCH", bg=SIDEBAR, fg="#F2F6F6",
             font=("Avenir Next", 12, "bold"), anchor="w",
         ).pack(fill="x", padx=20, pady=(22, 4))
         tk.Label(
@@ -89,7 +90,7 @@ class NotchHome:
         title_group = tk.Frame(header, bg=BG)
         title_group.pack(side="left", fill="x", expand=True)
         tk.Label(
-            title_group, text="Your scripts", bg=BG, fg="#F5F5F7",
+            title_group, text="Your scripts", bg=BG, fg="#F2F6F6",
             font=("Avenir Next", 26, "bold"), anchor="w",
         ).pack(fill="x")
         tk.Label(
@@ -112,7 +113,7 @@ class NotchHome:
         ).pack(fill="x", padx=22, pady=(19, 7))
         self.title_var = tk.StringVar()
         self.title_entry = tk.Entry(
-            editor, textvariable=self.title_var, bg=PANEL, fg="#F5F5F7",
+            editor, textvariable=self.title_var, bg=PANEL, fg="#F2F6F6",
             insertbackground="#FFFFFF", relief="flat", bd=0,
             font=("Avenir Next", 18, "bold"),
         )
@@ -266,9 +267,8 @@ class NotchHome:
             "--lang", self.args.lang,
         ]
         try:
-            log_path = NOTES_FILE.parent / "prompter.log"
-            log_path.parent.mkdir(parents=True, exist_ok=True)
-            with log_path.open("a", encoding="utf-8") as log_file:
+            PROMPTER_LOG.parent.mkdir(parents=True, exist_ok=True)
+            with PROMPTER_LOG.open("w", encoding="utf-8") as log_file:
                 self.active_process = subprocess.Popen(
                     command, cwd=str(HERE), stdin=subprocess.DEVNULL,
                     stdout=subprocess.DEVNULL, stderr=log_file,
@@ -290,7 +290,17 @@ class NotchHome:
             self.root.after(1200, self._check_presenter)
         else:
             self.active_process = None
-            message = "Presenter closed" if result == 0 else "Presenter exited · check prompter.log"
+            if result == 0:
+                message = "Presenter closed"
+            else:
+                message = "Presenter failed to start"
+                try:
+                    details = PROMPTER_LOG.read_text(encoding="utf-8").strip()
+                except OSError:
+                    details = "See the presenter log in Application Support/Open Notch."
+                if not details:
+                    details = "The presenter exited without writing an error log."
+                messagebox.showerror("Presenter failed to start", details[-2400:], parent=self.root)
             self.status.configure(text=message)
 
     def close(self):

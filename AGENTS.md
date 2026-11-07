@@ -1,6 +1,7 @@
 # Repository instructions
 
 - Read `DESIGN.md` before changing either app's interface. Treat its window roles, visual tokens, and control behavior as requirements.
+- Never reproduce a supplied visual reference literally. Treat references as mood and usability cues, then create an original layout; specifically, do not copy their camera/microphone/settings icon cluster or exact pill composition.
 - Keep the script library (`notch.py`) and floating presenter (`prompter.py`) as separate Python processes. The library owns note editing; the presenter owns the topmost overlay and speech following.
 - Put note persistence in `notes_store.py`, shared by both entry points. Keep `listen.swift` as the on-device speech helper.
 - The library keeps native macOS title chrome. The floating presenter is borderless and must not inherit the library's window style.

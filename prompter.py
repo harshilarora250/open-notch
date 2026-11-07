@@ -21,12 +21,27 @@ SWIFT_SRC = HERE / "listen.swift"
 BUILD_DIR = HERE / ".build"
 LISTEN_BIN = BUILD_DIR / "listen"
 
-PEARL = "#F4F5F2"
-INK = "#171B1D"
-SPOKEN = "#A1A8AA"
-MUTED = "#68757A"
-BLUE = "#4B91D5"
-GREEN = "#59A975"
+BG = "#000000"
+TODO = "#FFFFFF"
+DONE = "#6B6B6B"
+CURRENT = "#4B91D5"
+STATUS = "#9A9A9A"
+
+
+def set_presenter_activation_policy():
+    """Make the floating presenter a utility app without a Dock or menu-bar item."""
+    if sys.platform != "darwin":
+        return
+    try:
+        from AppKit import NSApplication, NSApplicationActivationPolicyAccessory
+
+        app = NSApplication.sharedApplication()
+        if not app.setActivationPolicy_(NSApplicationActivationPolicyAccessory):
+            print("Could not hide the presenter Dock and menu-bar items.", file=sys.stderr)
+    except ImportError:
+        pass
+    except Exception as exc:
+        print("Could not set the presenter activation policy:", exc, file=sys.stderr)
 
 INFO_PLIST = """<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -158,29 +173,6 @@ class Follower:
         self._skip_empty()
 
 
-def draw_icon(canvas, name, color):
-    canvas.delete("all")
-    canvas.configure(cursor="arrow")
-    if name == "close":
-        canvas.create_line(9, 9, 21, 21, fill=color, width=1.8, capstyle="round")
-        canvas.create_line(21, 9, 9, 21, fill=color, width=1.8, capstyle="round")
-    elif name == "camera":
-        canvas.create_rectangle(5, 8, 20, 21, outline=color, width=1.6)
-        canvas.create_polygon(20, 12, 25, 9, 25, 20, 20, 17,
-                             outline=color, fill="", width=1.6)
-        canvas.create_oval(10, 11, 16, 17, outline=color, width=1.4)
-    elif name == "mic":
-        canvas.create_oval(11, 4, 19, 18, outline=color, width=1.7)
-        canvas.create_arc(7, 8, 23, 23, start=180, extent=180,
-                          style="arc", outline=color, width=1.7)
-        canvas.create_line(15, 22, 15, 26, fill=color, width=1.7)
-        canvas.create_line(11, 26, 19, 26, fill=color, width=1.7)
-    elif name == "settings":
-        points = [15, 3, 21, 6, 25, 13, 22, 21, 15, 25, 8, 21, 5, 13, 9, 6]
-        canvas.create_polygon(points, outline=color, fill="", width=1.6)
-        canvas.create_oval(12, 10, 18, 16, outline=color, width=1.5)
-
-
 class Prompter:
     def __init__(self, script, voice, events, args):
         self.voice, self.events, self.args = voice, events, args
@@ -189,14 +181,15 @@ class Prompter:
         self.root = tk.Tk()
         self.root.title("Open Notch Presenter")
         self.root.overrideredirect(True)
-        self.root.configure(bg=PEARL)
+        set_presenter_activation_policy()
+        self.root.configure(bg=BG)
         self.root.attributes("-topmost", True)
-        self.root.attributes("-alpha", 0.97)
+        self.root.attributes("-alpha", 0.96)
         self.width, self.height = args.width, args.height
         screen_width = self.root.winfo_screenwidth()
         self.x = (screen_width - self.width) // 2
         if args.animate:
-            self.root.geometry(f"280x76+{(screen_width - 280) // 2}+8")
+            self.root.geometry(f"260x60+{(screen_width - 260) // 2}+8")
         else:
             self.root.geometry(f"{self.width}x{self.height}+{self.x}+8")
 
@@ -210,6 +203,8 @@ class Prompter:
             "<plus>": lambda _e: self._resize_text(2),
             "<equal>": lambda _e: self._resize_text(2),
             "<minus>": lambda _e: self._resize_text(-2),
+            "<bracketleft>": lambda _e: self._resize_panel(-30),
+            "<bracketright>": lambda _e: self._resize_panel(30),
             "<q>": self.close,
             "<Escape>": self.close,
         }.items():
@@ -222,62 +217,35 @@ class Prompter:
         self.root.after(40, self._poll)
 
     def _build_ui(self, script):
-        top = tk.Frame(self.root, bg=PEARL)
-        top.pack(fill="x", padx=24, pady=(17, 3))
-        self.close_icon = tk.Canvas(top, width=30, height=30, bg=PEARL,
-                                    highlightthickness=0)
-        draw_icon(self.close_icon, "close", MUTED)
-        self.close_icon.pack(side="left")
-        self.close_icon.bind("<Button-1>", lambda _e: self.close())
-        self._tooltip(self.close_icon, "Close presenter")
-
-        actions = tk.Frame(top, bg=PEARL)
-        actions.pack(side="right")
-        camera = tk.Canvas(actions, width=30, height=30, bg=PEARL,
-                           highlightthickness=0)
-        draw_icon(camera, "camera", MUTED)
-        camera.pack(side="left", padx=(0, 8))
-        self._tooltip(camera, "Camera is not in use")
-        self.mic_icon = tk.Canvas(actions, width=30, height=30, bg=PEARL,
-                                  highlightthickness=0)
-        draw_icon(self.mic_icon, "mic", BLUE)
-        self.mic_icon.pack(side="left", padx=8)
-        self.mic_icon.bind("<Button-1>", lambda _e: self.toggle_following())
-        self._tooltip(self.mic_icon, "Pause voice following")
-        settings = tk.Canvas(actions, width=30, height=30, bg=PEARL,
-                             highlightthickness=0)
-        draw_icon(settings, "settings", INK)
-        settings.pack(side="left", padx=(8, 0))
-        settings.bind("<Button-1>", self._show_settings)
-        self._tooltip(settings, "Presenter settings")
-
-        self.font = tkfont.Font(family="Avenir Next", size=self.args.size, weight="medium")
+        self.font = tkfont.Font(
+            family="Avenir Next", size=self.args.size, weight="normal",
+        )
         self.text = tk.Text(
-            self.root, wrap="word", bg=PEARL, fg=INK, font=self.font,
-            bd=0, highlightthickness=0, padx=28, pady=10, cursor="arrow",
-            spacing1=4, spacing3=4, insertwidth=0, selectbackground=PEARL,
+            self.root, wrap="word", bg=BG, fg=TODO, font=self.font,
+            bd=0, highlightthickness=0, padx=44, pady=22, cursor="arrow",
+            spacing1=6, spacing3=6, insertwidth=0, selectbackground=BG,
         )
         self.text.pack(fill="both", expand=True)
-        self.text.tag_configure("spoken", foreground=SPOKEN)
-        self.text.tag_configure("current", foreground=BLUE)
+        self.text.tag_configure("spoken", foreground=DONE)
+        self.text.tag_configure("current", foreground=CURRENT)
         self.words, self.spans = [], []
         self._load_script(script)
         self.follower = Follower(self.words)
         self._render()
 
-        footer = tk.Frame(self.root, bg=PEARL)
-        footer.pack(fill="x", padx=24, pady=(0, 16))
-        self.activity = tk.Canvas(footer, width=48, height=18, bg=PEARL,
+        footer = tk.Frame(self.root, bg=BG)
+        footer.pack(fill="x", padx=42, pady=(0, 15))
+        self.activity = tk.Canvas(footer, width=42, height=14, bg=BG,
                                  highlightthickness=0)
-        self.activity.pack(side="left", padx=(0, 10))
-        self._draw_activity(BLUE)
+        self.activity.pack(side="left", padx=(0, 9))
+        self._draw_activity(CURRENT)
         self.status = tk.Label(
-            footer, text="Following your voice", bg=PEARL, fg=MUTED,
-            font=("Avenir Next", 10), anchor="w",
+            footer, text="Following · Space pauses", bg=BG, fg=STATUS,
+            font=("Helvetica Neue", 9), anchor="w",
         )
         self.status.pack(side="left", fill="x", expand=True)
 
-        for widget in (self.root, top, self.text, footer, self.status):
+        for widget in (self.root, self.text, footer, self.status, self.activity):
             widget.bind("<ButtonPress-1>", self._drag_start, add="+")
             widget.bind("<B1-Motion>", self._drag_move, add="+")
 
@@ -345,15 +313,11 @@ class Prompter:
 
     def _set_status(self):
         if self.paused:
-            self.status.configure(text="Paused · press Space to resume", fg=MUTED)
-            draw_icon(self.mic_icon, "mic", MUTED)
-            self._tooltip(self.mic_icon, "Resume voice following")
-            self._draw_activity("#C7CECF")
+            self.status.configure(text="Paused · Space to resume", fg=STATUS)
+            self._draw_activity(STATUS)
         else:
-            self.status.configure(text="Following your voice", fg=MUTED)
-            draw_icon(self.mic_icon, "mic", BLUE)
-            self._tooltip(self.mic_icon, "Pause voice following")
-            self._draw_activity(GREEN)
+            self.status.configure(text="Following · Space pauses", fg=STATUS)
+            self._draw_activity(CURRENT)
         self._style_native_surface()
 
     def toggle_following(self, _event=None):
@@ -378,59 +342,6 @@ class Prompter:
         self.root.geometry(f"{self.width}x{self.height}+{self.x}+8")
         self._style_native_surface()
 
-    def _show_settings(self, event):
-        menu = tk.Menu(self.root, tearoff=False, bg=PEARL, fg=INK,
-                       activebackground="#DDECF5", activeforeground=INK,
-                       relief="flat", bd=0, font=("Avenir Next", 11))
-        menu.add_command(label="Text smaller  (−)", command=lambda: self._resize_text(-2))
-        menu.add_command(label="Text larger  (+)", command=lambda: self._resize_text(2))
-        menu.add_separator()
-        menu.add_command(label="Show more script", command=lambda: self._resize_panel(40))
-        menu.add_command(label="Show less script", command=lambda: self._resize_panel(-40))
-        menu.add_separator()
-        menu.add_command(label="Move back  (↑)", command=lambda: self._nudge(-6))
-        menu.add_command(label="Move forward  (↓)", command=lambda: self._nudge(6))
-        menu.add_command(label="Restart script  (R)", command=self._restart)
-        try:
-            menu.tk_popup(event.x_root, event.y_root)
-        finally:
-            menu.grab_release()
-
-    def _tooltip(self, widget, text):
-        widget._tooltip_text = text
-        if getattr(widget, "_tooltip_bound", False):
-            return
-        widget._tooltip_bound = True
-        widget._tooltip_window = None
-        widget._tooltip_after = None
-
-        def show():
-            if not widget.winfo_exists():
-                return
-            popup = tk.Toplevel(self.root)
-            popup.overrideredirect(True)
-            popup.configure(bg="#263139")
-            tk.Label(popup, text=widget._tooltip_text, bg="#263139", fg="#F4F5F2",
-                     font=("Avenir Next", 9), padx=8, pady=4).pack()
-            popup.geometry(f"+{widget.winfo_rootx()}+{widget.winfo_rooty() + 30}")
-            widget._tooltip_window = popup
-            widget._tooltip_after = None
-
-        def hide(_event=None):
-            if widget._tooltip_after:
-                self.root.after_cancel(widget._tooltip_after)
-                widget._tooltip_after = None
-            if widget._tooltip_window:
-                widget._tooltip_window.destroy()
-                widget._tooltip_window = None
-
-        def schedule(_event=None):
-            hide()
-            widget._tooltip_after = self.root.after(550, show)
-
-        widget.bind("<Enter>", schedule, add="+")
-        widget.bind("<Leave>", hide, add="+")
-
     def _style_native_surface(self):
         if sys.platform != "darwin":
             return
@@ -454,22 +365,22 @@ class Prompter:
             view = target.contentView()
             view.setWantsLayer_(True)
             layer = view.layer()
-            layer.setCornerRadius_(min(44, self.height / 2))
+            visible_height = self.root.winfo_height() or self.height
+            layer.setCornerRadius_(visible_height / 2)
             layer.setMasksToBounds_(True)
-            glow = GREEN if not self.paused else BLUE
             layer.setBorderWidth_(1.2)
             layer.setBorderColor_(NSColor.colorWithCalibratedRed_green_blue_alpha_(
-                int(glow[1:3], 16) / 255,
-                int(glow[3:5], 16) / 255,
-                int(glow[5:7], 16) / 255,
-                0.55,
+                int(CURRENT[1:3], 16) / 255,
+                int(CURRENT[3:5], 16) / 255,
+                int(CURRENT[5:7], 16) / 255,
+                0.24,
             ).CGColor())
             layer.setShadowColor_(NSColor.colorWithCalibratedRed_green_blue_alpha_(
-                0.38, 0.72, 0.96, 0.55,
+                0.22, 0.55, 0.78, 0.34,
             ).CGColor())
             layer.setShadowOffset_((0, -3))
-            layer.setShadowRadius_(22)
-            layer.setShadowOpacity_(0.6)
+            layer.setShadowRadius_(18)
+            layer.setShadowOpacity_(0.42)
         except ImportError:
             # Tk still supplies the separate, borderless presenter window.
             pass
@@ -481,11 +392,12 @@ class Prompter:
         self._animation_step = getattr(self, "_animation_step", 0) + 1
         t = min(1.0, self._animation_step / steps)
         eased = 1.0 - (1.0 - t) ** 3
-        width = round(280 + (self.width - 280) * eased)
-        height = round(76 + (self.height - 76) * eased)
+        width = round(260 + (self.width - 260) * eased)
+        height = round(60 + (self.height - 60) * eased)
         screen_width = self.root.winfo_screenwidth()
         x = (screen_width - width) // 2
         self.root.geometry(f"{width}x{height}+{x}+8")
+        self._style_native_surface()
         if t < 1:
             self.root.after(16, self._animate_expand)
         else:
@@ -513,9 +425,9 @@ def main():
     parser.add_argument("--note-id", help="load a saved note from the Open Notch library")
     parser.add_argument("-c", "--clipboard", action="store_true")
     parser.add_argument("--lang", default="en-US")
-    parser.add_argument("--size", type=int, default=25)
-    parser.add_argument("--width", type=int, default=680)
-    parser.add_argument("--height", type=int, default=250)
+    parser.add_argument("--size", type=int, default=27)
+    parser.add_argument("--width", type=int, default=720)
+    parser.add_argument("--height", type=int, default=210)
     parser.add_argument("--no-animate", dest="animate", action="store_false")
     parser.set_defaults(animate=True)
     args = parser.parse_args()
