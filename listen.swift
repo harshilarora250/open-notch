@@ -1,4 +1,4 @@
-// listen.swift - on-device speech recognition helper for notch.py (macOS only)
+// listen.swift - on-device speech recognition helper for prompter.py (macOS only)
 //
 // Prints one JSON object per line on stdout:
 //   {"event":"ready"}                 microphone is live
