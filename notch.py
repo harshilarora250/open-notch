@@ -566,10 +566,10 @@ class NoteStore:
 class NotchHome:
     """Home screen for creating, saving, and launching teleprompter scripts."""
 
-    BG = "#0B0B0D"
-    SIDEBAR = "#111114"
-    PANEL = "#161619"
-    MUTED = "#8A8A91"
+    BG = "#090B0E"
+    SIDEBAR = "#101318"
+    PANEL = "#12161B"
+    MUTED = "#929BA5"
     ACCENT = "#5AB8F7"
 
     def __init__(self, args):
@@ -581,9 +581,14 @@ class NotchHome:
         self.root.title("Open Notch")
         self.root.geometry("980x650")
         self.root.minsize(820, 540)
+        # Tk's override-redirect removes native title bars even when PyObjC is
+        # unavailable; the launcher supplies its own close and drag affordances.
+        self.root.overrideredirect(True)
         self.root.configure(bg=self.BG)
         use_accessory_app_policy()
         self.root.protocol("WM_DELETE_WINDOW", self.close)
+        self.root.bind("<Command-q>", self.close)
+        self.root.bind("<Command-w>", self.close)
 
         shell = tk.Frame(self.root, bg=self.BG)
         shell.pack(fill="both", expand=True, padx=20, pady=20)
@@ -591,14 +596,26 @@ class NotchHome:
         sidebar.pack(side="left", fill="y")
         sidebar.pack_propagate(False)
 
-        tk.Label(
-            sidebar, text="OPEN NOTCH", bg=self.SIDEBAR, fg="#F5F5F7",
-            font=("Helvetica Neue", 12, "bold"), anchor="w",
-        ).pack(fill="x", padx=20, pady=(22, 4))
+        brand_row = tk.Frame(sidebar, bg=self.SIDEBAR)
+        brand_row.pack(fill="x", padx=20, pady=(20, 4))
+        brand = tk.Label(
+            brand_row, text="OPEN NOTCH", bg=self.SIDEBAR, fg="#F5F5F7",
+            font=("Avenir Next", 12, "bold"), anchor="w",
+        )
+        brand.pack(side="left", fill="x", expand=True)
+        close_button = tk.Button(
+            brand_row, text="×", command=self.close, bg=self.SIDEBAR,
+            fg="#AAB3BC", activebackground="#272C33", activeforeground="#FFFFFF",
+            relief="flat", bd=0, highlightthickness=0,
+            font=("Avenir Next", 17), width=2, cursor="arrow",
+        )
+        close_button.pack(side="right", padx=(4, 0), pady=0)
+        self._bind_window_drag(brand_row)
+        self._bind_window_drag(brand)
         tk.Label(
             sidebar, text="Your presentation scripts", bg=self.SIDEBAR,
-            fg=self.MUTED, font=("Helvetica Neue", 10), anchor="w",
-        ).pack(fill="x", padx=20, pady=(0, 18))
+            fg=self.MUTED, font=("Avenir Next", 10), anchor="w",
+        ).pack(fill="x", padx=20, pady=(0, 16))
         self._button(
             sidebar, "+  New note", self.new_note, primary=True,
         ).pack(fill="x", padx=16, pady=(0, 18))
@@ -623,12 +640,15 @@ class NotchHome:
         heading.pack(side="left", fill="x", expand=True)
         tk.Label(
             heading, text="Home", bg=self.BG, fg="#F5F5F7",
-            font=("Helvetica Neue", 26, "bold"), anchor="w",
+            font=("Avenir Next", 27, "bold"), anchor="w",
         ).pack(fill="x")
         tk.Label(
             heading, text="Write it here. Keep it beside your camera when you present.",
-            bg=self.BG, fg=self.MUTED, font=("Helvetica Neue", 11), anchor="w",
+            bg=self.BG, fg=self.MUTED, font=("Avenir Next", 11), anchor="w",
         ).pack(fill="x", pady=(4, 0))
+        self._bind_window_drag(heading)
+        for child in heading.winfo_children():
+            self._bind_window_drag(child)
         self.launch_button = self._button(
             header, "Launch teleprompter  →", self.launch, primary=True,
         )
@@ -675,6 +695,8 @@ class NotchHome:
         self.save_button = self._button(footer, "Save", self.save_current)
         self.save_button.pack(side="right")
 
+        self.root.update_idletasks()
+        self._remove_native_titlebar()
         self._refresh_notes()
         if self.store.notes:
             self._select_id(self.store.notes[0]["id"])
@@ -690,8 +712,53 @@ class NotchHome:
             activebackground="#87CCFA" if primary else "#38383C",
             activeforeground="#07131A" if primary else "#FFFFFF",
             relief="flat", bd=0, highlightthickness=0,
-            font=("Helvetica Neue", 10, "bold"), cursor="arrow",
+            font=("Avenir Next", 10, "bold"), cursor="arrow",
             padx=14, pady=9,
+        )
+
+    def _remove_native_titlebar(self):
+        """Use a clean borderless macOS window with the launcher content as its chrome."""
+        if sys.platform != "darwin":
+            return
+        try:
+            from AppKit import NSApp, NSColor, NSWindowStyleMaskTitled, NSWindowTitleHidden
+
+            target = next(
+                (window for window in NSApp.windows() if window.title() == "Open Notch"),
+                None,
+            )
+            if target is None:
+                return
+            target.setStyleMask_(target.styleMask() & ~NSWindowStyleMaskTitled)
+            target.setTitleVisibility_(NSWindowTitleHidden)
+            target.setTitlebarAppearsTransparent_(True)
+            target.setMovableByWindowBackground_(False)
+            target.setOpaque_(False)
+            target.setBackgroundColor_(NSColor.clearColor())
+            target.setHasShadow_(True)
+            view = target.contentView()
+            view.setWantsLayer_(True)
+            layer = view.layer()
+            layer.setCornerRadius_(18)
+            layer.setMasksToBounds_(True)
+        except ImportError:
+            # The Tk override-redirect above already removed the title bar.
+            # PyObjC only adds the native shadow and rounded window corners.
+            return
+        except Exception as exc:
+            print("Could not remove the native title bar:", exc, file=sys.stderr)
+
+    def _bind_window_drag(self, widget):
+        widget.bind("<ButtonPress-1>", self._drag_start, add="+")
+        widget.bind("<B1-Motion>", self._drag_move, add="+")
+
+    def _drag_start(self, event):
+        self._drag_offset_x = event.x_root - self.root.winfo_x()
+        self._drag_offset_y = event.y_root - self.root.winfo_y()
+
+    def _drag_move(self, event):
+        self.root.geometry(
+            f"+{event.x_root - self._drag_offset_x}+{event.y_root - self._drag_offset_y}"
         )
 
     def _set_editor_enabled(self, enabled):
@@ -817,7 +884,7 @@ class NotchHome:
         if self.active_prompter is prompter:
             self.active_prompter = None
 
-    def close(self):
+    def close(self, _event=None):
         self._save_current(silent=True)
         if self.active_prompter:
             self.active_prompter.quit()
