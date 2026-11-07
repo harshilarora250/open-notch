@@ -37,12 +37,16 @@ import sys
 import threading
 import tkinter as tk
 import tkinter.font as tkfont
+from datetime import datetime, timezone
 from pathlib import Path
+from tkinter import messagebox
+from uuid import uuid4
 
 HERE = Path(__file__).resolve().parent
 SWIFT_SRC = HERE / "listen.swift"
 BUILD_DIR = HERE / ".build"
 LISTEN_BIN = BUILD_DIR / "listen"
+NOTES_FILE = Path.home() / "Library" / "Application Support" / "Open Notch" / "notes.json"
 
 SAMPLE_SCRIPT = (
     "Let's start with our Q2 results. Revenue is up fourteen percent, and activation "
@@ -64,6 +68,26 @@ INFO_PLIST = """<?xml version="1.0" encoding="UTF-8"?>
 <key>NSSpeechRecognitionUsageDescription</key><string>Notch transcribes your speech on this Mac to follow your script.</string>
 </dict></plist>
 """
+
+
+def use_accessory_app_policy():
+    """Hide the Python menu-bar and Dock entries while keeping app windows usable."""
+    if sys.platform != "darwin":
+        return
+    try:
+        from AppKit import NSApplication, NSApplicationActivationPolicyAccessory
+
+        app = NSApplication.sharedApplication()
+        if not app.setActivationPolicy_(NSApplicationActivationPolicyAccessory):
+            print("Could not switch Open Notch to accessory app mode.", file=sys.stderr)
+    except ImportError:
+        print(
+            "For macOS menu-bar integration, install: "
+            "python3 -m pip install pyobjc-framework-Cocoa",
+            file=sys.stderr,
+        )
+    except Exception as exc:
+        print("Could not hide the Python app menu:", exc, file=sys.stderr)
 
 
 # --------------------------------------------------------------------------- build
@@ -205,14 +229,16 @@ class NotchApp:
     DONE = "#6B6B6B"
     CURRENT = "#5AB8F7"   # Notch's accent blue
 
-    def __init__(self, script_text, voice, events, args):
+    def __init__(self, script_text, voice, events, args, parent=None, on_close=None):
         self.voice, self.events = voice, events
+        self.on_close = on_close
         self.paused = False
         self.seen = 0
 
-        self.root = tk.Tk()
+        self.root = tk.Tk() if parent is None else tk.Toplevel(parent)
         self.root.title("Notch")
         self.root.configure(bg=self.BG)
+        use_accessory_app_policy()
         try:  # borderless window on macOS Tk
             self.root.tk.call("::tk::unsupported::MacWindowStyle", "style",
                               self.root._w, "plain", "none")
@@ -239,16 +265,44 @@ class NotchApp:
         self.font = tkfont.Font(family="Helvetica Neue", size=args.size, weight="bold")
         self.text = tk.Text(
             self.root, wrap="word", bg=self.BG, fg=self.TODO, font=self.font,
-            bd=0, highlightthickness=0, padx=18, pady=8, cursor="arrow",
-            spacing1=2, spacing3=2, insertwidth=0, selectbackground=self.BG,
+            bd=0, highlightthickness=0, padx=24, pady=14, cursor="arrow",
+            spacing1=3, spacing3=3, insertwidth=0, selectbackground=self.BG,
         )
         self.text.pack(fill="both", expand=True)
         self.text.tag_configure("done", foreground=self.DONE)
         self.text.tag_configure("cur", foreground=self.CURRENT)
 
-        self.status = tk.Label(self.root, text="Starting...", bg=self.BG, fg="#9A9A9A",
-                               font=("Helvetica Neue", 11), anchor="w", padx=18)
-        self.status.pack(fill="x", side="bottom")
+        self.footer = tk.Frame(self.root, bg=self.BG, padx=14, pady=8)
+        self.footer.pack(fill="x", side="bottom")
+        self.status = tk.Label(
+            self.footer, text="Starting...", bg=self.BG, fg="#9A9A9A",
+            font=("Helvetica Neue", 10), anchor="w",
+        )
+        self.status.pack(side="left", fill="x", expand=True, padx=(4, 8))
+
+        for label, command, width in (
+            ("−6", lambda: self._nudge(-6), 3),
+            ("+6", lambda: self._nudge(6), 3),
+            ("A−", lambda: self._resize(-2), 3),
+            ("A+", lambda: self._resize(2), 3),
+            ("Restart", self._restart, 7),
+        ):
+            button = tk.Button(
+                self.footer, text=label, command=command, width=width,
+                bg="#1C1C1E", fg="#E5E5E7", activebackground="#38383A",
+                activeforeground="#FFFFFF", disabledforeground="#777777",
+                relief="flat", bd=0, highlightthickness=0,
+                font=("Helvetica Neue", 9), cursor="arrow", padx=5, pady=4,
+            )
+            button.pack(side="left", padx=2)
+        self.pause_button = tk.Button(
+            self.footer, text="Pause", command=self.toggle_pause,
+            width=6, bg="#1C1C1E", fg="#E5E5E7", activebackground="#38383A",
+            activeforeground="#FFFFFF", relief="flat", bd=0,
+            highlightthickness=0, font=("Helvetica Neue", 9),
+            cursor="arrow", padx=5, pady=4,
+        )
+        self.pause_button.pack(side="left", padx=(2, 4))
 
         self._load_script(script_text)
         self.follower = Follower(self.words)
@@ -262,8 +316,9 @@ class NotchApp:
             "<q>": self.quit, "<Escape>": self.quit,
         }.items():
             self.root.bind(key, fn)
-        self.status.bind("<ButtonPress-1>", self._drag_start)
-        self.status.bind("<B1-Motion>", self._drag_move)
+        for drag_widget in (self.root, self.text, self.status, self.footer):
+            drag_widget.bind("<ButtonPress-1>", self._drag_start)
+            drag_widget.bind("<B1-Motion>", self._drag_move)
         self.root.protocol("WM_DELETE_WINDOW", self.quit)
 
         self.root.update()
@@ -307,7 +362,9 @@ class NotchApp:
             view.setWantsLayer_(True)
             layer = view.layer()
             layer.setBackgroundColor_(NSColor.blackColor().CGColor())
-            layer.setCornerRadius_(self.corner_radius)
+            width, height = self.root.winfo_width(), self.root.winfo_height()
+            radius = min(self.corner_radius, width / 2, height / 2)
+            layer.setCornerRadius_(radius)
             layer.setMasksToBounds_(True)
 
             # Keep the actual Tk widgets black too, so there is no visible
@@ -402,8 +459,10 @@ class NotchApp:
     def _set_status(self):
         if self.paused:
             self.status.configure(text="Paused  (space to resume)", fg="#E0B341")
+            self.pause_button.configure(text="Resume")
         else:
             self.status.configure(text="Following your voice", fg="#5AB8F7")
+            self.pause_button.configure(text="Pause")
 
     # ---- controls
     def toggle_pause(self, _e=None):
@@ -448,6 +507,321 @@ class NotchApp:
     def quit(self, _e=None):
         self.voice.stop()
         self.root.destroy()
+        if self.on_close:
+            self.on_close(self)
+
+    def run(self):
+        self.root.mainloop()
+
+
+# --------------------------------------------------------------------------- home
+class NoteStore:
+    """Small local JSON store for scripts managed from the home screen."""
+
+    def __init__(self, path=NOTES_FILE):
+        self.path = Path(path)
+        if self.path.exists():
+            try:
+                data = json.loads(self.path.read_text(encoding="utf-8"))
+                self.notes = [
+                    note for note in data
+                    if isinstance(note, dict)
+                    and isinstance(note.get("id"), str)
+                    and isinstance(note.get("title"), str)
+                    and isinstance(note.get("body"), str)
+                ]
+            except (OSError, json.JSONDecodeError) as exc:
+                raise ValueError(f"Could not read saved notes at {self.path}: {exc}") from exc
+        else:
+            self.notes = []
+
+    def save(self):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        temp_path = self.path.with_suffix(".tmp")
+        temp_path.write_text(
+            json.dumps(self.notes, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        temp_path.replace(self.path)
+
+    def create(self):
+        note = {
+            "id": str(uuid4()),
+            "title": "Untitled note",
+            "body": "",
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        self.notes.insert(0, note)
+        self.save()
+        return note
+
+    def get(self, note_id):
+        return next((note for note in self.notes if note["id"] == note_id), None)
+
+    def delete(self, note_id):
+        self.notes = [note for note in self.notes if note["id"] != note_id]
+        self.save()
+
+
+class NotchHome:
+    """Home screen for creating, saving, and launching teleprompter scripts."""
+
+    BG = "#0B0B0D"
+    SIDEBAR = "#111114"
+    PANEL = "#161619"
+    MUTED = "#8A8A91"
+    ACCENT = "#5AB8F7"
+
+    def __init__(self, args):
+        self.args = args
+        self.store = NoteStore()
+        self.selected_id = None
+        self.active_prompter = None
+        self.root = tk.Tk()
+        self.root.title("Open Notch")
+        self.root.geometry("980x650")
+        self.root.minsize(820, 540)
+        self.root.configure(bg=self.BG)
+        use_accessory_app_policy()
+        self.root.protocol("WM_DELETE_WINDOW", self.close)
+
+        shell = tk.Frame(self.root, bg=self.BG)
+        shell.pack(fill="both", expand=True, padx=20, pady=20)
+        sidebar = tk.Frame(shell, bg=self.SIDEBAR, width=260)
+        sidebar.pack(side="left", fill="y")
+        sidebar.pack_propagate(False)
+
+        tk.Label(
+            sidebar, text="OPEN NOTCH", bg=self.SIDEBAR, fg="#F5F5F7",
+            font=("Helvetica Neue", 12, "bold"), anchor="w",
+        ).pack(fill="x", padx=20, pady=(22, 4))
+        tk.Label(
+            sidebar, text="Your presentation scripts", bg=self.SIDEBAR,
+            fg=self.MUTED, font=("Helvetica Neue", 10), anchor="w",
+        ).pack(fill="x", padx=20, pady=(0, 18))
+        self._button(
+            sidebar, "+  New note", self.new_note, primary=True,
+        ).pack(fill="x", padx=16, pady=(0, 18))
+        tk.Label(
+            sidebar, text="LIBRARY", bg=self.SIDEBAR, fg="#73737B",
+            font=("Helvetica Neue", 9, "bold"), anchor="w",
+        ).pack(fill="x", padx=20, pady=(0, 8))
+        self.note_list = tk.Listbox(
+            sidebar, bg=self.SIDEBAR, fg="#D8D8DC", selectbackground="#26394A",
+            selectforeground="#FFFFFF", activestyle="none", relief="flat",
+            borderwidth=0, highlightthickness=0, font=("Helvetica Neue", 12),
+            exportselection=False,
+        )
+        self.note_list.pack(fill="both", expand=True, padx=10, pady=(0, 12))
+        self.note_list.bind("<<ListboxSelect>>", self._on_select)
+
+        content = tk.Frame(shell, bg=self.BG)
+        content.pack(side="left", fill="both", expand=True, padx=(24, 4))
+        header = tk.Frame(content, bg=self.BG)
+        header.pack(fill="x", pady=(6, 20))
+        heading = tk.Frame(header, bg=self.BG)
+        heading.pack(side="left", fill="x", expand=True)
+        tk.Label(
+            heading, text="Home", bg=self.BG, fg="#F5F5F7",
+            font=("Helvetica Neue", 26, "bold"), anchor="w",
+        ).pack(fill="x")
+        tk.Label(
+            heading, text="Write it here. Keep it beside your camera when you present.",
+            bg=self.BG, fg=self.MUTED, font=("Helvetica Neue", 11), anchor="w",
+        ).pack(fill="x", pady=(4, 0))
+        self.launch_button = self._button(
+            header, "Launch teleprompter  →", self.launch, primary=True,
+        )
+        self.launch_button.pack(side="right", padx=(12, 0), pady=(8, 0))
+
+        editor = tk.Frame(content, bg=self.PANEL, highlightthickness=1,
+                          highlightbackground="#28282D")
+        editor.pack(fill="both", expand=True)
+        tk.Label(
+            editor, text="NOTE TITLE", bg=self.PANEL, fg=self.MUTED,
+            font=("Helvetica Neue", 9, "bold"), anchor="w",
+        ).pack(fill="x", padx=20, pady=(18, 7))
+        self.title_var = tk.StringVar()
+        self.title_entry = tk.Entry(
+            editor, textvariable=self.title_var, bg=self.PANEL, fg="#F5F5F7",
+            insertbackground="#FFFFFF", relief="flat", bd=0,
+            font=("Helvetica Neue", 18, "bold"),
+        )
+        self.title_entry.pack(fill="x", padx=20, pady=(0, 16))
+        tk.Frame(editor, bg="#29292E", height=1).pack(fill="x", padx=20)
+        self.body = tk.Text(
+            editor, wrap="word", bg=self.PANEL, fg="#E7E7EA",
+            insertbackground="#FFFFFF", selectbackground="#31526A",
+            relief="flat", bd=0, highlightthickness=0,
+            font=("Helvetica Neue", 14), padx=20, pady=18, spacing1=3,
+        )
+        self.body.pack(fill="both", expand=True)
+        self.body.bind("<KeyRelease>", self._update_count)
+
+        footer = tk.Frame(content, bg=self.BG)
+        footer.pack(fill="x", pady=(14, 0))
+        self.count_label = tk.Label(
+            footer, text="0 words", bg=self.BG, fg=self.MUTED,
+            font=("Helvetica Neue", 10), anchor="w",
+        )
+        self.count_label.pack(side="left", fill="x", expand=True)
+        self.status = tk.Label(
+            footer, text="Saved on this Mac", bg=self.BG, fg=self.MUTED,
+            font=("Helvetica Neue", 10),
+        )
+        self.status.pack(side="left", padx=(0, 12))
+        self.delete_button = self._button(footer, "Delete", self.delete_note)
+        self.delete_button.pack(side="right", padx=(8, 0))
+        self.save_button = self._button(footer, "Save", self.save_current)
+        self.save_button.pack(side="right")
+
+        self._refresh_notes()
+        if self.store.notes:
+            self._select_id(self.store.notes[0]["id"])
+        else:
+            self._set_editor_enabled(False)
+            self.status.configure(text="Create a note to get started")
+
+    def _button(self, parent, label, command, primary=False):
+        return tk.Button(
+            parent, text=label, command=command,
+            bg=self.ACCENT if primary else "#242428",
+            fg="#07131A" if primary else "#E5E5E7",
+            activebackground="#87CCFA" if primary else "#38383C",
+            activeforeground="#07131A" if primary else "#FFFFFF",
+            relief="flat", bd=0, highlightthickness=0,
+            font=("Helvetica Neue", 10, "bold"), cursor="arrow",
+            padx=14, pady=9,
+        )
+
+    def _set_editor_enabled(self, enabled):
+        state = "normal" if enabled else "disabled"
+        self.title_entry.configure(state=state)
+        self.body.configure(state=state)
+        self.save_button.configure(state=state)
+        self.delete_button.configure(state=state)
+        self.launch_button.configure(state=state)
+
+    def _refresh_notes(self, selected_id=None):
+        self.note_list.delete(0, "end")
+        for note in self.store.notes:
+            title = note["title"].strip() or "Untitled note"
+            self.note_list.insert("end", title)
+            if note["id"] == selected_id:
+                index = self.note_list.size() - 1
+                self.note_list.selection_set(index)
+                self.note_list.activate(index)
+
+    def _select_id(self, note_id):
+        note = self.store.get(note_id)
+        if not note:
+            return
+        self.selected_id = note_id
+        self.title_var.set(note["title"])
+        self.body.configure(state="normal")
+        self.body.delete("1.0", "end")
+        self.body.insert("1.0", note["body"])
+        self._set_editor_enabled(True)
+        self._refresh_notes(note_id)
+        self.status.configure(text="Saved on this Mac")
+        self._update_count()
+
+    def _on_select(self, _event=None):
+        selection = self.note_list.curselection()
+        if not selection:
+            return
+        note = self.store.notes[selection[0]]
+        if note["id"] == self.selected_id:
+            return
+        self._save_current(silent=True)
+        self._select_id(note["id"])
+
+    def _save_current(self, silent=False):
+        note = self.store.get(self.selected_id) if self.selected_id else None
+        if not note:
+            return False
+        title = self.title_var.get().strip() or "Untitled note"
+        body = self.body.get("1.0", "end-1c")
+        changed = title != note["title"] or body != note["body"]
+        if changed:
+            note["title"] = title
+            note["body"] = body
+            note["updated_at"] = datetime.now(timezone.utc).isoformat()
+            self.store.save()
+            self._refresh_notes(self.selected_id)
+        if not silent:
+            self.status.configure(text="Saved" if changed else "All changes saved")
+        return True
+
+    def save_current(self):
+        self._save_current()
+
+    def new_note(self):
+        self._save_current(silent=True)
+        note = self.store.create()
+        self._refresh_notes(note["id"])
+        self._select_id(note["id"])
+        self.title_entry.focus_set()
+        self.title_entry.selection_range(0, "end")
+
+    def delete_note(self):
+        note = self.store.get(self.selected_id) if self.selected_id else None
+        if not note:
+            return
+        if not messagebox.askyesno("Delete note", f"Delete ‘{note['title']}’?", parent=self.root):
+            return
+        self.store.delete(note["id"])
+        self.selected_id = None
+        if self.store.notes:
+            self._select_id(self.store.notes[0]["id"])
+        else:
+            self.title_var.set("")
+            self.body.configure(state="normal")
+            self.body.delete("1.0", "end")
+            self._set_editor_enabled(False)
+            self._refresh_notes()
+            self.status.configure(text="Create a note to get started")
+            self._update_count()
+
+    def _update_count(self, _event=None):
+        body = self.body.get("1.0", "end-1c")
+        count = len(body.split())
+        self.count_label.configure(text=f"{count} word{'s' if count != 1 else ''}")
+
+    def launch(self):
+        note = self.store.get(self.selected_id) if self.selected_id else None
+        if not note:
+            return
+        self._save_current(silent=True)
+        note = self.store.get(self.selected_id)
+        script = note["body"].strip()
+        if not script:
+            self.status.configure(text="Add some script text before launching")
+            return
+        if self.active_prompter:
+            self.active_prompter.quit()
+        try:
+            binary = build_listener()
+            events = queue.Queue()
+            voice = Voice(binary, self.args.lang, events)
+            self.active_prompter = NotchApp(
+                script, voice, events, self.args, parent=self.root,
+                on_close=self._prompter_closed,
+            )
+            self.status.configure(text=f"Launched {note['title']}")
+        except (OSError, RuntimeError, SystemExit) as exc:
+            self.status.configure(text="Could not launch teleprompter")
+            messagebox.showerror("Could not launch", str(exc), parent=self.root)
+
+    def _prompter_closed(self, prompter):
+        if self.active_prompter is prompter:
+            self.active_prompter = None
+
+    def close(self):
+        self._save_current(silent=True)
+        if self.active_prompter:
+            self.active_prompter.quit()
+        self.root.destroy()
 
     def run(self):
         self.root.mainloop()
@@ -463,8 +837,8 @@ def main():
     ap.add_argument("--width", type=int, default=640)
     ap.add_argument("--height", type=int, default=170,
                     help="expanded panel height in points (default: 170)")
-    ap.add_argument("--corner-radius", type=float, default=28,
-                    help="native macOS panel corner radius in points (default: 28)")
+    ap.add_argument("--corner-radius", type=float, default=36,
+                    help="native macOS panel corner radius in points (default: 36)")
     ap.add_argument("--no-animate", dest="animate", action="store_false",
                     help="show the expanded panel immediately")
     ap.set_defaults(animate=True)
@@ -476,7 +850,8 @@ def main():
     elif args.script:
         script = Path(args.script).expanduser().read_text(encoding="utf-8")
     else:
-        script = SAMPLE_SCRIPT
+        NotchHome(args).run()
+        return
     if not script.strip():
         sys.exit("The script is empty.")
 
