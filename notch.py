@@ -29,8 +29,8 @@ class NotchHome:
         self.args = args
         self.root = tk.Tk()
         self.root.title("Open Notch")
-        self.root.geometry("1180x760")
-        self.root.minsize(930, 600)
+        self.root.geometry("1120x740")
+        self.root.minsize(900, 580)
         self.root.configure(bg=BG)
         self.root.protocol("WM_DELETE_WINDOW", self.close)
         self.root.bind("<Command-q>", self.close)
@@ -68,16 +68,16 @@ class NotchHome:
         sidebar.pack(side="left", fill="y")
         sidebar.pack_propagate(False)
         tk.Label(
-            sidebar, text="OPEN\nNOTCH", bg=SIDEBAR, fg="#F2F6F6",
-            font=("Avenir Next", 16, "bold"), anchor="w", justify="left",
+            sidebar, text="OPEN NOTCH", bg=SIDEBAR, fg="#F2F6F6",
+            font=("Helvetica Neue", 13, "bold"), anchor="w",
         ).pack(fill="x", padx=22, pady=(27, 7))
         tk.Label(
             sidebar, text="SPEAK WITH CLARITY", bg=SIDEBAR, fg=MUTED,
-            font=("Avenir Next", 8), anchor="w",
+            font=("Helvetica Neue", 9), anchor="w",
         ).pack(fill="x", padx=22, pady=(0, 31))
         tk.Label(
             sidebar, text="●   Scripts", bg="#1A2633", fg="#DCEBFA",
-            font=("Avenir Next", 11, "bold"), anchor="w", padx=13, pady=11,
+            font=("Helvetica Neue", 11, "bold"), anchor="w", padx=13, pady=11,
         ).pack(fill="x", padx=11)
         tk.Label(
             sidebar, text="LOCAL LIBRARY", bg=SIDEBAR, fg="#737D87",
@@ -124,21 +124,30 @@ class NotchHome:
         search_entry.pack(side="left", fill="x", expand=True, padx=(0, 10), pady=9)
         self.search_var.trace_add("write", lambda *_: self._refresh_notes(self.selected_id))
 
-        self.note_list = tk.Listbox(
-            browser, bg="#0E1116", fg="#D8DDE1", selectbackground="#1E3449",
-            selectforeground="#FFFFFF", activestyle="none", relief="flat",
-            borderwidth=0, highlightthickness=0, font=("Avenir Next", 11),
-            exportselection=False,
+        self.notes_canvas = tk.Canvas(
+            browser, bg="#0E1116", bd=0, highlightthickness=0,
         )
-        self.note_list.pack(side="left", fill="both", expand=True, padx=(9, 0), pady=(0, 12))
-        self.note_scrollbar = tk.Scrollbar(
-            browser, orient="vertical", command=self.note_list.yview,
-            bg="#0E1116", troughcolor="#0E1116", activebackground="#303B48",
-            highlightthickness=0, bd=0, relief="flat",
+        self.notes_canvas.pack(fill="both", expand=True, padx=10, pady=(0, 12))
+        self.notes_inner = tk.Frame(self.notes_canvas, bg="#0E1116")
+        self.notes_window = self.notes_canvas.create_window(
+            (0, 0), window=self.notes_inner, anchor="nw",
         )
-        self.note_list.configure(yscrollcommand=self.note_scrollbar.set)
-        self.note_scrollbar.pack(side="right", fill="y", padx=(0, 7), pady=(0, 12))
-        self.note_list.bind("<<ListboxSelect>>", self._on_select)
+        self.notes_inner.bind(
+            "<Configure>",
+            lambda _event: self.notes_canvas.configure(
+                scrollregion=self.notes_canvas.bbox("all"),
+            ),
+        )
+        self.notes_canvas.bind(
+            "<Configure>",
+            lambda event: self.notes_canvas.itemconfigure(
+                self.notes_window, width=event.width,
+            ),
+        )
+        self.notes_canvas.bind(
+            "<MouseWheel>",
+            lambda event: self.notes_canvas.yview_scroll(-1 if event.delta > 0 else 1, "units"),
+        )
 
         content = tk.Frame(shell, bg=BG)
         content.pack(side="left", fill="both", expand=True, padx=(25, 15))
@@ -153,7 +162,7 @@ class NotchHome:
         self.title_entry = tk.Entry(
             title_shell, textvariable=self.title_var, bg="#11151A", fg="#F2F6F6",
             insertbackground="#FFFFFF", relief="flat", bd=0,
-            font=("Avenir Next", 17, "bold"),
+            font=("Helvetica Neue", 16, "bold"), highlightthickness=0,
         )
         self.title_entry.pack(fill="x", padx=16, pady=12)
         self.launch_button = self._button(
@@ -170,7 +179,7 @@ class NotchHome:
         script_header.pack(fill="x", padx=24, pady=(19, 6))
         tk.Label(
             script_header, text="SCRIPT CONTENT", bg=PANEL, fg="#E4E8ED",
-            font=("Avenir Next", 11, "bold"), anchor="w",
+            font=("Helvetica Neue", 11, "bold"), anchor="w",
         ).pack(side="left")
         self.editor_count = tk.Label(
             script_header, text="0 words", bg=PANEL, fg=MUTED,
@@ -181,7 +190,7 @@ class NotchHome:
             editor, wrap="word", bg=PANEL, fg="#E7EAED",
             insertbackground="#FFFFFF", selectbackground="#31526A",
             relief="flat", bd=0, highlightthickness=0,
-            font=("Avenir Next", 14), padx=24, pady=17, spacing1=5,
+            font=("Helvetica Neue", 14), padx=24, pady=17, spacing1=7,
         )
         self.body.pack(fill="both", expand=True)
         self.body.bind("<KeyRelease>", self._update_count)
@@ -199,16 +208,20 @@ class NotchHome:
         self.save_button.pack(side="right")
 
     def _button(self, parent, label, command, primary=False):
-        return tk.Button(
-            parent, text=label, command=command,
-            bg=ACCENT if primary else "#24292E",
-            fg="#07131A" if primary else "#E5E8EB",
-            activebackground="#87CCFA" if primary else "#383E44",
-            activeforeground="#07131A" if primary else "#FFFFFF",
+        base_bg = ACCENT if primary else "#24292E"
+        hover_bg = "#68A8E8" if primary else "#343B44"
+        base_fg = "#07131A" if primary else "#E5E8EB"
+        button = tk.Label(
+            parent, text=label, bg=base_bg, fg=base_fg,
             relief="flat", bd=0, highlightthickness=0,
-            font=("Avenir Next", 10, "bold"), cursor="arrow",
+            font=("Helvetica Neue", 10, "bold"), cursor="hand2",
             padx=14, pady=9,
         )
+        button.bind("<Button-1>", lambda _event: command() if button.cget("state") != "disabled" else None)
+        button.bind("<Enter>", lambda _event: button.configure(bg=hover_bg)
+                    if button.cget("state") != "disabled" else None)
+        button.bind("<Leave>", lambda _event: button.configure(bg=base_bg))
+        return button
 
     def _set_editor_enabled(self, enabled):
         state = "normal" if enabled else "disabled"
@@ -225,13 +238,45 @@ class NotchHome:
             note for note in self.store.notes
             if not query or query in note["title"].casefold() or query in note["body"].casefold()
         ]
-        self.note_list.delete(0, "end")
+        for child in self.notes_inner.winfo_children():
+            child.destroy()
         for note in self.visible_notes:
-            self.note_list.insert("end", note["title"].strip() or "Untitled script")
-            if note["id"] == selected_id:
-                row = self.note_list.size() - 1
-                self.note_list.selection_set(row)
-                self.note_list.activate(row)
+            selected = note["id"] == selected_id
+            card_bg = "#1B2A39" if selected else "#141A21"
+            card = tk.Frame(
+                self.notes_inner, bg=card_bg, highlightthickness=1,
+                highlightbackground="#35516C" if selected else "#222A34",
+                cursor="hand2",
+            )
+            card.pack(fill="x", padx=4, pady=(0, 9))
+            title = tk.Label(
+                card, text=note["title"].strip() or "Untitled script",
+                bg=card_bg, fg="#F2F6F8", font=("Helvetica Neue", 11, "bold"),
+                anchor="w", justify="left", wraplength=220,
+            )
+            title.pack(fill="x", padx=12, pady=(11, 4))
+            preview = " ".join(note["body"].split())
+            if len(preview) > 76:
+                preview = preview[:73].rstrip() + "…"
+            excerpt = tk.Label(
+                card, text=preview or "No script text yet",
+                bg=card_bg, fg="#AEB8C4", font=("Helvetica Neue", 9),
+                anchor="w", justify="left", wraplength=220,
+            )
+            excerpt.pack(fill="x", padx=12, pady=(0, 8))
+            try:
+                updated = datetime.fromisoformat(note["updated_at"]).strftime("%b %d")
+            except (KeyError, ValueError):
+                updated = ""
+            count = len(note["body"].split())
+            meta = tk.Label(
+                card, text=f"{count} words  ·  {updated}" if updated else f"{count} words",
+                bg=card_bg, fg="#778493", font=("Helvetica Neue", 8), anchor="w",
+            )
+            meta.pack(fill="x", padx=12, pady=(0, 11))
+            for widget in (card, title, excerpt, meta):
+                widget.bind("<Button-1>", lambda _event, note_id=note["id"]: self._on_select(note_id))
+                widget.bind("<MouseWheel>", self._scroll_notes)
         if hasattr(self, "note_count"):
             self.note_count.configure(text=str(len(self.store.notes)))
         self._refreshing_notes = False
@@ -250,16 +295,15 @@ class NotchHome:
         self.status.configure(text="Saved locally")
         self._update_count()
 
-    def _on_select(self, _event=None):
+    def _scroll_notes(self, event):
+        self.notes_canvas.yview_scroll(-1 if event.delta > 0 else 1, "units")
+
+    def _on_select(self, note_id):
         if getattr(self, "_refreshing_notes", False):
             return
-        selected = self.note_list.curselection()
-        if not selected or selected[0] >= len(self.visible_notes):
-            return
-        note = self.visible_notes[selected[0]]
-        if note["id"] != self.selected_id:
+        if note_id != self.selected_id:
             self._save_current(silent=True)
-            self._select_id(note["id"])
+            self._select_id(note_id)
 
     def _save_current(self, silent=False):
         note = self.store.get(self.selected_id) if self.selected_id else None

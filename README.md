@@ -37,3 +37,4 @@ The presenter still opens borderlessly without PyObjC; native corner masking and
 
 - **Space** pauses/resumes script following.
 - **R** restarts the script; **Up/Down** nudge the position; **+/−** change text size; **[ / ]** change panel height; **Q/Esc** closes the presenter.
+- The presenter closes shortly after voice-following reaches the final script word.

@@ -11,7 +11,7 @@ The library is a quiet dark workspace. The presenter is a black, blue-lit capsul
 
 ## Reference for this pass
 
-The user explicitly selected the scripts-and-editor reference as the library UI target. Follow its three-part hierarchy: a slim navigation rail, a searchable script list, and a focused editor with the launch action near the title. Adapt the colors and controls to Open Notch; do not add recording, profile, copy, camera, or other features that do not exist. This is an explicit exception to the default originality rule in `AGENTS.md`.
+The user explicitly selected the scripts-and-editor reference as the library UI target. Follow its three-part hierarchy: a slim navigation rail, a searchable script list with title, excerpt, and word/date metadata cards, and a focused editor with the launch action near the title. Adapt the colors and controls to Open Notch; do not add recording, profile, copy, camera, or other features that do not exist. This is an explicit exception to the default originality rule in `AGENTS.md`.
 
 The floating presenter remains its own minimal, text-first surface and should not inherit the library's navigation or toolbar.
 
@@ -48,6 +48,7 @@ Keep the blue restrained: it marks the active word, voice-following state, and a
 - Keep the presenter topmost, draggable, and separate from the library process. Quitting the library closes its launched presenter and speech helper.
 - The presenter contains only script text and a compact status/audio cue. Show no camera, microphone, close, or settings buttons.
 - Preserve keyboard controls: Space pauses/resumes, Up/Down nudges, R restarts, plus/minus changes text size, bracket keys change panel height, and Q/Esc closes.
+- Close the presenter shortly after voice-following advances through the final script word. Resetting or moving back before the close delay expires cancels the close.
 - Preserve local speech following and script persistence. Open Notch uses the microphone for voice following and never accesses the camera.
 - Fit the presenter's width and height to the script's rendered text, within screen-aware minimum and maximum bounds. Short scripts use a compact capsule; long scripts expand until the cap and remain scrollable.
 - Retain the short ease-out expansion from a compact pill into the reading capsule.

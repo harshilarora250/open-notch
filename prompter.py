@@ -294,10 +294,15 @@ class Prompter:
         if position:
             self.text.tag_add("spoken", "1.0", self.spans[position - 1][1])
         if position < len(self.spans):
+            if getattr(self, "_finish_after_id", None):
+                self.root.after_cancel(self._finish_after_id)
+                self._finish_after_id = None
             self.text.tag_add("current", *self.spans[position])
             self.text.yview(f"{self.spans[position][0]} -1 displaylines")
         elif self.spans and hasattr(self, "status"):
-            self.status.configure(text="End of script")
+            self.status.configure(text="Script complete · closing…")
+            if not getattr(self, "_finish_after_id", None):
+                self._finish_after_id = self.root.after(1100, self.close)
 
     def _draw_activity(self, color):
         self.activity.delete("all")
