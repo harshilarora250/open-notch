@@ -6,7 +6,9 @@ import os
 import signal
 import subprocess
 import sys
+import math
 import tkinter as tk
+import tkinter.font as tkfont
 from datetime import datetime, timezone
 from pathlib import Path
 from tkinter import messagebox
@@ -16,12 +18,27 @@ from notes_store import NOTES_FILE, NoteStore
 HERE = Path(__file__).resolve().parent
 PROMPTER_SCRIPT = HERE / "prompter.py"
 
-BG = "#090B0E"
-SIDEBAR = "#101318"
-PANEL = "#12161B"
-MUTED = "#929BA5"
-ACCENT = "#4B91D5"
+BG = "#000000"
+SIDEBAR = "#070707"
+BROWSER = "#090909"
+PANEL = "#101010"
+MUTED = "#929292"
 PROMPTER_LOG = NOTES_FILE.parent / "prompter.log"
+
+
+def _rounded_points(x1, y1, x2, y2, radius):
+    points = []
+    for center_x, center_y, start in (
+        (x1 + radius, y1 + radius, 180),
+        (x2 - radius, y1 + radius, 270),
+        (x2 - radius, y2 - radius, 0),
+        (x1 + radius, y2 - radius, 90),
+    ):
+        for step in range(7):
+            angle = math.radians(start + step * 15)
+            points.extend((center_x + radius * math.cos(angle),
+                           center_y + radius * math.sin(angle)))
+    return points
 
 
 class NotchHome:
@@ -68,67 +85,77 @@ class NotchHome:
         sidebar.pack(side="left", fill="y")
         sidebar.pack_propagate(False)
         tk.Label(
-            sidebar, text="OPEN NOTCH", bg=SIDEBAR, fg="#F2F6F6",
+            sidebar, text="OPEN NOTCH", bg=SIDEBAR, fg="#FFFFFF",
             font=("Helvetica Neue", 13, "bold"), anchor="w",
         ).pack(fill="x", padx=22, pady=(27, 7))
+        tk.Frame(sidebar, bg="#292929", height=1).pack(
+            fill="x", padx=20, pady=(8, 23),
+        )
         tk.Label(
-            sidebar, text="SPEAK WITH CLARITY", bg=SIDEBAR, fg=MUTED,
-            font=("Helvetica Neue", 9), anchor="w",
-        ).pack(fill="x", padx=22, pady=(0, 31))
-        tk.Label(
-            sidebar, text="●   Scripts", bg="#1A2633", fg="#DCEBFA",
+            sidebar, text="●   Scripts", bg="#202020", fg="#FFFFFF",
             font=("Helvetica Neue", 11, "bold"), anchor="w", padx=13, pady=11,
         ).pack(fill="x", padx=11)
         tk.Label(
-            sidebar, text="LOCAL LIBRARY", bg=SIDEBAR, fg="#737D87",
-            font=("Avenir Next", 8, "bold"), anchor="w",
-        ).pack(side="bottom", fill="x", padx=22, pady=(0, 7))
-        tk.Label(
-            sidebar, text="Saved on this Mac", bg=SIDEBAR, fg=MUTED,
-            font=("Avenir Next", 9), anchor="w",
-        ).pack(side="bottom", fill="x", padx=22, pady=(0, 23))
+            sidebar, text="Private · saved on this Mac", bg=SIDEBAR, fg=MUTED,
+            font=("Helvetica Neue", 9), anchor="w", justify="left", wraplength=130,
+        ).pack(side="bottom", fill="x", padx=20, pady=(0, 22))
 
-        browser = tk.Frame(shell, bg="#0E1116", width=276)
+        browser = tk.Frame(shell, bg=BROWSER, width=276)
         browser.pack(side="left", fill="y", padx=(1, 0))
         browser.pack_propagate(False)
-        browser_header = tk.Frame(browser, bg="#0E1116")
+        browser_header = tk.Frame(browser, bg=BROWSER)
         browser_header.pack(fill="x", padx=18, pady=(27, 17))
         tk.Label(
-            browser_header, text="Scripts", bg="#0E1116", fg="#F2F6F6",
-            font=("Avenir Next", 18, "bold"), anchor="w",
+            browser_header, text="Scripts", bg=BROWSER, fg="#FFFFFF",
+            font=("Helvetica Neue", 18, "bold"), anchor="w",
         ).pack(side="left", fill="x", expand=True)
         self.note_count = tk.Label(
-            browser_header, text="0", bg="#18212B", fg=MUTED,
+            browser_header, text="0", bg="#202020", fg=MUTED,
             font=("Helvetica Neue", 9), padx=8, pady=4,
         )
         self.note_count.pack(side="left", padx=(8, 0))
-        self._button(browser_header, "+", self.new_note, primary=True).pack(
+        self._button(browser_header, "+", self.new_note).pack(
             side="right", padx=(8, 0),
         )
 
-        search_shell = tk.Frame(
-            browser, bg="#171C23", highlightthickness=1,
-            highlightbackground="#242B34",
+        search_shell = tk.Canvas(
+            browser, bg=BROWSER, height=38, highlightthickness=0,
         )
         search_shell.pack(fill="x", padx=14, pady=(0, 15))
-        tk.Label(
-            search_shell, text="Search", bg="#171C23", fg=MUTED,
-            font=("Helvetica Neue", 10),
-        ).pack(side="left", padx=(11, 5), pady=9)
         self.search_var = tk.StringVar()
         search_entry = tk.Entry(
-            search_shell, textvariable=self.search_var, bg="#171C23", fg="#E5E8EB",
+            search_shell, textvariable=self.search_var, bg="#171717", fg="#FFFFFF",
             insertbackground="#FFFFFF", relief="flat", bd=0,
-            font=("Avenir Next", 10),
+            font=("Helvetica Neue", 10), highlightthickness=0,
         )
-        search_entry.pack(side="left", fill="x", expand=True, padx=(0, 10), pady=9)
+        search_window = search_shell.create_window(
+            70, 19, window=search_entry, anchor="w", width=150,
+        )
+        search_shell.create_text(
+            14, 19, text="Search", fill=MUTED,
+            font=("Helvetica Neue", 10), anchor="w", tags="search-label",
+        )
+
+        def layout_search(event):
+            search_shell.delete("surface")
+            search_shell.create_polygon(
+                _rounded_points(1, 1, event.width - 1, 37, 17), smooth=True,
+                splinesteps=20, fill="#171717", outline="#303030", width=1,
+                tags="surface",
+            )
+            search_shell.tag_lower("surface")
+            search_shell.coords("search-label", 14, 19)
+            search_shell.coords(search_window, 70, 19)
+            search_shell.itemconfigure(search_window, width=max(40, event.width - 82))
+
+        search_shell.bind("<Configure>", layout_search)
         self.search_var.trace_add("write", lambda *_: self._refresh_notes(self.selected_id))
 
         self.notes_canvas = tk.Canvas(
-            browser, bg="#0E1116", bd=0, highlightthickness=0,
+            browser, bg=BROWSER, bd=0, highlightthickness=0,
         )
         self.notes_canvas.pack(fill="both", expand=True, padx=10, pady=(0, 12))
-        self.notes_inner = tk.Frame(self.notes_canvas, bg="#0E1116")
+        self.notes_inner = tk.Frame(self.notes_canvas, bg=BROWSER)
         self.notes_window = self.notes_canvas.create_window(
             (0, 0), window=self.notes_inner, anchor="nw",
         )
@@ -153,32 +180,61 @@ class NotchHome:
         content.pack(side="left", fill="both", expand=True, padx=(25, 15))
         header = tk.Frame(content, bg=BG)
         header.pack(fill="x", pady=(9, 20))
-        title_shell = tk.Frame(
-            header, bg="#11151A", highlightthickness=1,
-            highlightbackground="#252B33",
-        )
+        title_shell = tk.Canvas(header, bg=BG, height=52, highlightthickness=0)
         title_shell.pack(side="left", fill="x", expand=True)
         self.title_var = tk.StringVar()
         self.title_entry = tk.Entry(
-            title_shell, textvariable=self.title_var, bg="#11151A", fg="#F2F6F6",
+            title_shell, textvariable=self.title_var, bg="#111111", fg="#FFFFFF",
             insertbackground="#FFFFFF", relief="flat", bd=0,
             font=("Helvetica Neue", 16, "bold"), highlightthickness=0,
         )
-        self.title_entry.pack(fill="x", padx=16, pady=12)
+        title_window = title_shell.create_window(
+            17, 26, window=self.title_entry, anchor="w", width=500,
+        )
+
+        def layout_title(event):
+            title_shell.delete("surface")
+            title_shell.create_polygon(
+                _rounded_points(1, 1, event.width - 1, 51, 14), smooth=True,
+                splinesteps=20, fill="#111111", outline="#303030", width=1,
+                tags="surface",
+            )
+            title_shell.tag_lower("surface")
+            title_shell.coords(title_window, 17, 26)
+            title_shell.itemconfigure(title_window, width=max(80, event.width - 34))
+
+        title_shell.bind("<Configure>", layout_title)
         self.launch_button = self._button(
-            header, "Present  →", self.launch, primary=True,
+            header, "Present  →", self.launch,
         )
         self.launch_button.pack(side="right", padx=(12, 0))
 
-        editor = tk.Frame(
-            content, bg=PANEL, highlightthickness=1,
-            highlightbackground="#252B33",
+        editor_surface = tk.Canvas(content, bg=BG, highlightthickness=0)
+        editor_surface.pack(fill="both", expand=True)
+        editor = tk.Frame(editor_surface, bg=PANEL)
+        editor_window = editor_surface.create_window(
+            5, 5, window=editor, anchor="nw", width=700, height=500,
         )
-        editor.pack(fill="both", expand=True)
+
+        def layout_editor(event):
+            editor_surface.delete("surface")
+            editor_surface.create_polygon(
+                _rounded_points(1, 1, event.width - 1, event.height - 1, 19),
+                smooth=True, splinesteps=24, fill=PANEL,
+                outline="#303030", width=1, tags="surface",
+            )
+            editor_surface.tag_lower("surface")
+            editor_surface.coords(editor_window, 5, 5)
+            editor_surface.itemconfigure(
+                editor_window, width=max(100, event.width - 10),
+                height=max(100, event.height - 10),
+            )
+
+        editor_surface.bind("<Configure>", layout_editor)
         script_header = tk.Frame(editor, bg=PANEL)
         script_header.pack(fill="x", padx=24, pady=(19, 6))
         tk.Label(
-            script_header, text="SCRIPT CONTENT", bg=PANEL, fg="#E4E8ED",
+            script_header, text="Script", bg=PANEL, fg="#F0F0F0",
             font=("Helvetica Neue", 11, "bold"), anchor="w",
         ).pack(side="left")
         self.editor_count = tk.Label(
@@ -187,8 +243,8 @@ class NotchHome:
         )
         self.editor_count.pack(side="right")
         self.body = tk.Text(
-            editor, wrap="word", bg=PANEL, fg="#E7EAED",
-            insertbackground="#FFFFFF", selectbackground="#31526A",
+            editor, wrap="word", bg=PANEL, fg="#EEEEEE",
+            insertbackground="#FFFFFF", selectbackground="#555555",
             relief="flat", bd=0, highlightthickness=0,
             font=("Helvetica Neue", 14), padx=24, pady=17, spacing1=7,
         )
@@ -207,29 +263,47 @@ class NotchHome:
         self.save_button = self._button(footer, "Save", self.save_current)
         self.save_button.pack(side="right")
 
-    def _button(self, parent, label, command, primary=False):
-        base_bg = ACCENT if primary else "#24292E"
-        hover_bg = "#68A8E8" if primary else "#343B44"
-        base_fg = "#07131A" if primary else "#E5E8EB"
-        button = tk.Label(
-            parent, text=label, bg=base_bg, fg=base_fg,
-            relief="flat", bd=0, highlightthickness=0,
-            font=("Helvetica Neue", 10, "bold"), cursor="hand2",
-            padx=14, pady=9,
+    def _button(self, parent, label, command):
+        base_bg = "#FFFFFF"
+        hover_bg = "#BDBDBD"
+        base_fg = "#000000"
+        font = tkfont.Font(root=parent, family="Helvetica Neue", size=10, weight="bold")
+        button = tk.Canvas(
+            parent, width=font.measure(label) + 28, height=font.metrics("linespace") + 20,
+            bg=parent.cget("bg"), highlightthickness=0, bd=0, cursor="hand2",
         )
-        button.bind("<Button-1>", lambda _event: command() if button.cget("state") != "disabled" else None)
-        button.bind("<Enter>", lambda _event: button.configure(bg=hover_bg)
-                    if button.cget("state") != "disabled" else None)
-        button.bind("<Leave>", lambda _event: button.configure(bg=base_bg))
+        button.enabled = True
+        button.fill_color = base_bg
+        shape = button.create_polygon(
+            _rounded_points(1, 1, font.measure(label) + 27, font.metrics("linespace") + 19, 9),
+            smooth=True, splinesteps=20, fill=base_bg, outline="",
+        )
+        text = button.create_text(
+            (font.measure(label) + 28) / 2, (font.metrics("linespace") + 20) / 2,
+            text=label, fill=base_fg, font=font,
+        )
+        button.bind("<Button-1>", lambda _event: command() if button.enabled else None)
+        button.bind("<Enter>", lambda _event: button.itemconfigure(shape, fill=hover_bg)
+                    if button.enabled else None)
+        button.bind("<Leave>", lambda _event: button.itemconfigure(shape, fill=button.fill_color))
+
+        def set_enabled(enabled):
+            button.enabled = enabled
+            button.fill_color = base_bg if enabled else "#444444"
+            button.itemconfigure(shape, fill=button.fill_color)
+            button.itemconfigure(text, fill=base_fg if enabled else "#AAAAAA")
+            button.configure(cursor="hand2" if enabled else "arrow")
+
+        button.set_enabled = set_enabled
         return button
 
     def _set_editor_enabled(self, enabled):
         state = "normal" if enabled else "disabled"
         self.title_entry.configure(state=state)
         self.body.configure(state=state)
-        self.save_button.configure(state=state)
-        self.delete_button.configure(state=state)
-        self.launch_button.configure(state=state)
+        self.save_button.set_enabled(enabled)
+        self.delete_button.set_enabled(enabled)
+        self.launch_button.set_enabled(enabled)
 
     def _refresh_notes(self, selected_id=None):
         self._refreshing_notes = True
@@ -242,41 +316,50 @@ class NotchHome:
             child.destroy()
         for note in self.visible_notes:
             selected = note["id"] == selected_id
-            card_bg = "#1B2A39" if selected else "#141A21"
-            card = tk.Frame(
-                self.notes_inner, bg=card_bg, highlightthickness=1,
-                highlightbackground="#35516C" if selected else "#222A34",
-                cursor="hand2",
+            card_bg = "#242424" if selected else "#111111"
+            card = tk.Canvas(
+                self.notes_inner, height=112, bg=BROWSER,
+                highlightthickness=0, bd=0, cursor="hand2",
             )
             card.pack(fill="x", padx=4, pady=(0, 9))
-            title = tk.Label(
-                card, text=note["title"].strip() or "Untitled script",
-                bg=card_bg, fg="#F2F6F8", font=("Helvetica Neue", 11, "bold"),
-                anchor="w", justify="left", wraplength=220,
-            )
-            title.pack(fill="x", padx=12, pady=(11, 4))
             preview = " ".join(note["body"].split())
             if len(preview) > 76:
                 preview = preview[:73].rstrip() + "…"
-            excerpt = tk.Label(
-                card, text=preview or "No script text yet",
-                bg=card_bg, fg="#AEB8C4", font=("Helvetica Neue", 9),
-                anchor="w", justify="left", wraplength=220,
-            )
-            excerpt.pack(fill="x", padx=12, pady=(0, 8))
             try:
                 updated = datetime.fromisoformat(note["updated_at"]).strftime("%b %d")
             except (KeyError, ValueError):
                 updated = ""
             count = len(note["body"].split())
-            meta = tk.Label(
-                card, text=f"{count} words  ·  {updated}" if updated else f"{count} words",
-                bg=card_bg, fg="#778493", font=("Helvetica Neue", 8), anchor="w",
-            )
-            meta.pack(fill="x", padx=12, pady=(0, 11))
-            for widget in (card, title, excerpt, meta):
-                widget.bind("<Button-1>", lambda _event, note_id=note["id"]: self._on_select(note_id))
-                widget.bind("<MouseWheel>", self._scroll_notes)
+            title_text = note["title"].strip() or "Untitled script"
+            meta_text = f"{count} WORDS  ·  {updated}" if updated else f"{count} WORDS"
+
+            def draw_card(event, canvas=card, fill=card_bg, active=selected,
+                          title=title_text, excerpt=preview or "No script text yet",
+                          meta=meta_text):
+                canvas.delete("all")
+                canvas.create_polygon(
+                    _rounded_points(1, 1, event.width - 1, 111, 11),
+                    smooth=True, splinesteps=20, fill=fill,
+                    outline="#777777" if active else "#292929", width=1,
+                )
+                canvas.create_text(
+                    14, 12, text=title, fill="#F4F4F4",
+                    font=("Helvetica Neue", 11, "bold"), anchor="nw",
+                    width=max(100, event.width - 28),
+                )
+                canvas.create_text(
+                    14, 39, text=excerpt, fill="#B8B8B8",
+                    font=("Helvetica Neue", 9), anchor="nw",
+                    width=max(100, event.width - 28),
+                )
+                canvas.create_text(
+                    14, 91, text=meta, fill="#858585",
+                    font=("Helvetica Neue", 8), anchor="nw",
+                )
+
+            card.bind("<Configure>", draw_card)
+            card.bind("<Button-1>", lambda _event, note_id=note["id"]: self._on_select(note_id))
+            card.bind("<MouseWheel>", self._scroll_notes)
         if hasattr(self, "note_count"):
             self.note_count.configure(text=str(len(self.store.notes)))
         self._refreshing_notes = False

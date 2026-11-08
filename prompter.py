@@ -23,10 +23,10 @@ BUILD_DIR = HERE / ".build"
 LISTEN_BIN = BUILD_DIR / "listen"
 
 BG = "#000000"
-TODO = "#FFFFFF"
-DONE = "#6B6B6B"
-CURRENT = "#4B91D5"
-STATUS = "#9A9A9A"
+TODO = "#D6D6D6"
+DONE = "#777777"
+CURRENT = "#FFFFFF"
+STATUS = "#A0A0A0"
 
 
 def set_presenter_activation_policy():
@@ -178,6 +178,7 @@ class Prompter:
     def __init__(self, script, voice, events, args):
         self.voice, self.events, self.args = voice, events, args
         self.paused = False
+        self.closed = False
         self.seen = 0
         self.root = tk.Tk()
         self.root.title("Open Notch Presenter")
@@ -187,6 +188,7 @@ class Prompter:
         self.root.attributes("-topmost", True)
         self.root.attributes("-alpha", 0.96)
         self._build_ui(script)
+        self._build_hover_close()
         screen_width = self.root.winfo_screenwidth()
         self.screen_height = self.root.winfo_screenheight()
         self.width, self.height = self._fit_geometry(script)
@@ -215,7 +217,7 @@ class Prompter:
         self._style_native_surface()
         if args.animate:
             self.root.after(24, self._animate_expand)
-        self.root.after(40, self._poll)
+        self._poll_after_id = self.root.after(40, self._poll)
 
     def _build_ui(self, script):
         self.font = tkfont.Font(
@@ -249,6 +251,47 @@ class Prompter:
         for widget in (self.root, self.text, footer, self.status, self.activity):
             widget.bind("<ButtonPress-1>", self._drag_start, add="+")
             widget.bind("<B1-Motion>", self._drag_move, add="+")
+            widget.bind("<Enter>", self._show_hover_close, add="+")
+            widget.bind("<Leave>", self._schedule_hide_close, add="+")
+
+    def _build_hover_close(self):
+        self.close_control = tk.Canvas(
+            self.root, width=34, height=34, bg=BG,
+            highlightthickness=0, cursor="hand2",
+        )
+        self.close_control.create_oval(
+            2, 2, 32, 32, fill="#222222", outline="#777777", width=1,
+        )
+        self.close_control.create_line(
+            12, 12, 22, 22, fill="#FFFFFF", width=1.7, capstyle="round",
+        )
+        self.close_control.create_line(
+            22, 12, 12, 22, fill="#FFFFFF", width=1.7, capstyle="round",
+        )
+        self.close_control.bind("<Button-1>", self.close)
+        self.close_control.bind("<Enter>", self._show_hover_close)
+        self.close_control.bind("<Leave>", self._schedule_hide_close)
+        self.close_control.place_forget()
+        self._hide_close_after_id = None
+
+    def _show_hover_close(self, _event=None):
+        if self._hide_close_after_id:
+            self.root.after_cancel(self._hide_close_after_id)
+            self._hide_close_after_id = None
+        self.close_control.place(relx=1.0, x=-12, y=10, anchor="ne")
+
+    def _schedule_hide_close(self, _event=None):
+        if self._hide_close_after_id:
+            self.root.after_cancel(self._hide_close_after_id)
+        self._hide_close_after_id = self.root.after(220, self._hide_close_if_outside)
+
+    def _hide_close_if_outside(self):
+        self._hide_close_after_id = None
+        px, py = self.root.winfo_pointerxy()
+        left, top = self.root.winfo_rootx(), self.root.winfo_rooty()
+        inside = left <= px < left + self.root.winfo_width() and top <= py < top + self.root.winfo_height()
+        if not inside:
+            self.close_control.place_forget()
 
     def _fit_geometry(self, script):
         screen_width = self.root.winfo_screenwidth()
@@ -313,25 +356,34 @@ class Prompter:
                                       fill=color, width=2, capstyle="round")
 
     def _poll(self):
+        self._poll_after_id = None
+        if self.closed:
+            return
         try:
             while True:
                 self._handle(self.events.get_nowait())
         except queue.Empty:
             pass
-        if self.root.winfo_exists():
-            self.root.after(40, self._poll)
+        except tk.TclError:
+            return
+        if not self.closed:
+            try:
+                if self.root.winfo_exists():
+                    self._poll_after_id = self.root.after(40, self._poll)
+            except tk.TclError:
+                self.closed = True
 
     def _handle(self, message):
         if "error" in message:
-            self.status.configure(text=message["error"][:90], fg="#B44848")
-            self._draw_activity("#C96969")
+            self.status.configure(text=message["error"][:90], fg=STATUS)
+            self._draw_activity(STATUS)
             return
         if message.get("event") == "ready":
             self._set_status()
         elif message.get("event") == "reset":
             self.seen = 0
         elif message.get("event") == "ended":
-            self.status.configure(text="Voice engine stopped", fg="#B44848")
+            self.status.configure(text="Voice engine stopped", fg=STATUS)
         elif "text" in message:
             words = message["text"].split()
             if len(words) < self.seen:
@@ -406,11 +458,11 @@ class Prompter:
                 0.24,
             ).CGColor())
             layer.setShadowColor_(NSColor.colorWithCalibratedRed_green_blue_alpha_(
-                0.22, 0.55, 0.78, 0.34,
+                0.72, 0.72, 0.72, 0.26,
             ).CGColor())
             layer.setShadowOffset_((0, -3))
             layer.setShadowRadius_(18)
-            layer.setShadowOpacity_(0.42)
+            layer.setShadowOpacity_(0.24)
         except ImportError:
             # Tk still supplies the separate, borderless presenter window.
             pass
@@ -442,8 +494,22 @@ class Prompter:
         self.root.geometry(f"+{event.x_root - self.drag_x}+{event.y_root - self.drag_y}")
 
     def close(self, _event=None):
+        if self.closed:
+            return
+        self.closed = True
+        for attr in ("_poll_after_id", "_finish_after_id", "_hide_close_after_id"):
+            callback_id = getattr(self, attr, None)
+            if callback_id:
+                try:
+                    self.root.after_cancel(callback_id)
+                except tk.TclError:
+                    pass
+                setattr(self, attr, None)
         self.voice.stop()
-        self.root.destroy()
+        try:
+            self.root.destroy()
+        except tk.TclError:
+            pass
 
     def run(self):
         self.root.mainloop()
