@@ -2,6 +2,8 @@
 """Open Notch's titled script library and launcher."""
 
 import argparse
+import os
+import signal
 import subprocess
 import sys
 import tkinter as tk
@@ -27,10 +29,16 @@ class NotchHome:
         self.args = args
         self.root = tk.Tk()
         self.root.title("Open Notch")
-        self.root.geometry("980x650")
-        self.root.minsize(820, 540)
+        self.root.geometry("1060x720")
+        self.root.minsize(860, 580)
         self.root.configure(bg=BG)
         self.root.protocol("WM_DELETE_WINDOW", self.close)
+        self.root.bind("<Command-q>", self.close)
+        if sys.platform == "darwin":
+            try:
+                self.root.createcommand("tk::mac::Quit", self.close)
+            except tk.TclError:
+                pass
         self.root.bind("<Command-s>", lambda _e: self.save_current())
         self.root.bind("<Command-n>", lambda _e: self.new_note())
         self.root.bind("<Command-Return>", lambda _e: self.launch())
@@ -54,22 +62,23 @@ class NotchHome:
 
     def _build_ui(self):
         shell = tk.Frame(self.root, bg=BG)
-        shell.pack(fill="both", expand=True, padx=22, pady=22)
+        shell.pack(fill="both", expand=True, padx=28, pady=26)
 
-        sidebar = tk.Frame(shell, bg=SIDEBAR, width=258)
+        sidebar = tk.Frame(shell, bg=SIDEBAR, width=238)
         sidebar.pack(side="left", fill="y")
         sidebar.pack_propagate(False)
         tk.Label(
             sidebar, text="OPEN NOTCH", bg=SIDEBAR, fg="#F2F6F6",
-            font=("Avenir Next", 12, "bold"), anchor="w",
-        ).pack(fill="x", padx=20, pady=(22, 4))
+            font=("Avenir Next", 13, "bold"), anchor="w",
+        ).pack(fill="x", padx=20, pady=(24, 5))
         tk.Label(
             sidebar, text="Presentation scripts", bg=SIDEBAR, fg=MUTED,
             font=("Avenir Next", 10), anchor="w",
-        ).pack(fill="x", padx=20, pady=(0, 18))
+        ).pack(fill="x", padx=20, pady=(0, 22))
         self._button(sidebar, "+  New script", self.new_note, primary=True).pack(
-            fill="x", padx=16, pady=(0, 22),
+            fill="x", padx=14, pady=(0, 24),
         )
+        tk.Frame(sidebar, bg="#262C34", height=1).pack(fill="x", padx=16, pady=(0, 19))
         tk.Label(
             sidebar, text="LIBRARY", bg=SIDEBAR, fg="#737D87",
             font=("Avenir Next", 9, "bold"), anchor="w",
@@ -84,62 +93,68 @@ class NotchHome:
         self.note_list.bind("<<ListboxSelect>>", self._on_select)
 
         content = tk.Frame(shell, bg=BG)
-        content.pack(side="left", fill="both", expand=True, padx=(26, 2))
+        content.pack(side="left", fill="both", expand=True, padx=(30, 0))
         header = tk.Frame(content, bg=BG)
-        header.pack(fill="x", pady=(4, 20))
+        header.pack(fill="x", pady=(3, 23))
         title_group = tk.Frame(header, bg=BG)
         title_group.pack(side="left", fill="x", expand=True)
         tk.Label(
-            title_group, text="Your scripts", bg=BG, fg="#F2F6F6",
-            font=("Avenir Next", 26, "bold"), anchor="w",
+            title_group, text="Script library", bg=BG, fg="#F2F6F6",
+            font=("Avenir Next", 28, "bold"), anchor="w",
         ).pack(fill="x")
         tk.Label(
-            title_group, text="Prepare a script, then keep it close while you present.",
+            title_group, text="A quiet place to shape what you want to say.",
             bg=BG, fg=MUTED, font=("Avenir Next", 11), anchor="w",
-        ).pack(fill="x", pady=(3, 0))
+        ).pack(fill="x", pady=(5, 0))
         self.launch_button = self._button(
             header, "Launch presenter  →", self.launch, primary=True,
         )
-        self.launch_button.pack(side="right", padx=(12, 0), pady=(8, 0))
+        self.launch_button.pack(side="right", padx=(16, 0), pady=(12, 0))
 
         editor = tk.Frame(
             content, bg=PANEL, highlightthickness=1,
-            highlightbackground="#282E34",
+            highlightbackground="#252B33",
         )
         editor.pack(fill="both", expand=True)
         tk.Label(
-            editor, text="SCRIPT TITLE", bg=PANEL, fg=MUTED,
+            editor, text="TITLE", bg=PANEL, fg=MUTED,
             font=("Avenir Next", 9, "bold"), anchor="w",
-        ).pack(fill="x", padx=22, pady=(19, 7))
+        ).pack(fill="x", padx=26, pady=(23, 8))
         self.title_var = tk.StringVar()
         self.title_entry = tk.Entry(
             editor, textvariable=self.title_var, bg=PANEL, fg="#F2F6F6",
             insertbackground="#FFFFFF", relief="flat", bd=0,
             font=("Avenir Next", 18, "bold"),
         )
-        self.title_entry.pack(fill="x", padx=22, pady=(0, 16))
-        tk.Frame(editor, bg="#292F35", height=1).pack(fill="x", padx=22)
+        self.title_entry.pack(fill="x", padx=26, pady=(0, 19))
+        tk.Frame(editor, bg="#292F35", height=1).pack(fill="x", padx=26)
+        script_header = tk.Frame(editor, bg=PANEL)
+        script_header.pack(fill="x", padx=26, pady=(17, 2))
+        tk.Label(
+            script_header, text="SCRIPT", bg=PANEL, fg=MUTED,
+            font=("Avenir Next", 9, "bold"), anchor="w",
+        ).pack(side="left")
+        self.editor_count = tk.Label(
+            script_header, text="0 words", bg=PANEL, fg=MUTED,
+            font=("Helvetica Neue", 9), anchor="e",
+        )
+        self.editor_count.pack(side="right")
         self.body = tk.Text(
             editor, wrap="word", bg=PANEL, fg="#E7EAED",
             insertbackground="#FFFFFF", selectbackground="#31526A",
             relief="flat", bd=0, highlightthickness=0,
-            font=("Avenir Next", 13), padx=22, pady=18, spacing1=3,
+            font=("Avenir Next", 14), padx=26, pady=15, spacing1=5,
         )
         self.body.pack(fill="both", expand=True)
         self.body.bind("<KeyRelease>", self._update_count)
 
         footer = tk.Frame(content, bg=BG)
-        footer.pack(fill="x", pady=(14, 0))
-        self.count_label = tk.Label(
-            footer, text="0 words", bg=BG, fg=MUTED,
-            font=("Avenir Next", 10), anchor="w",
-        )
-        self.count_label.pack(side="left", fill="x", expand=True)
+        footer.pack(fill="x", pady=(15, 0))
         self.status = tk.Label(
             footer, text="Saved locally", bg=BG, fg=MUTED,
             font=("Avenir Next", 10),
         )
-        self.status.pack(side="left", padx=(0, 12))
+        self.status.pack(side="left", fill="x", expand=True)
         self.delete_button = self._button(footer, "Delete", self.delete_note)
         self.delete_button.pack(side="right", padx=(8, 0))
         self.save_button = self._button(footer, "Save", self.save_current)
@@ -248,7 +263,9 @@ class NotchHome:
 
     def _update_count(self, _event=None):
         count = len(self.body.get("1.0", "end-1c").split())
-        self.count_label.configure(text=f"{count} word{'s' if count != 1 else ''}")
+        label = f"{count} word{'s' if count != 1 else ''}"
+        if hasattr(self, "editor_count"):
+            self.editor_count.configure(text=label)
 
     def launch(self):
         note = self.store.get(self.selected_id) if self.selected_id else None
@@ -303,10 +320,30 @@ class NotchHome:
                 messagebox.showerror("Presenter failed to start", details[-2400:], parent=self.root)
             self.status.configure(text=message)
 
-    def close(self):
+    def close(self, _event=None):
         self._save_current(silent=True)
-        # The presenter is a separate app process and is intentionally left open.
+        self._stop_presenter()
         self.root.destroy()
+
+    def _stop_presenter(self):
+        process = self.active_process
+        self.active_process = None
+        if not process or process.poll() is not None:
+            return
+
+        # The presenter and its Swift speech helper share the launch process group.
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except (ProcessLookupError, PermissionError):
+            process.terminate()
+        try:
+            process.wait(timeout=1.5)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                process.kill()
+            process.wait()
 
     def run(self):
         self.root.mainloop()

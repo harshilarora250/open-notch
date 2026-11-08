@@ -42,8 +42,8 @@ Keep the blue restrained: it marks the active word, voice-following state, and a
 
 ## Layout and behavior
 
-- Keep the library's title bar, two-column script/editor layout, and clear launch action.
-- Keep the presenter topmost, draggable, and separate from the library process. Closing the library does not close an already running presenter.
+- Keep the library's title bar, two-column script/editor layout, and clear launch action. Give the editor deliberate spacing and a clear title/script hierarchy.
+- Keep the presenter topmost, draggable, and separate from the library process. Quitting the library closes its launched presenter and speech helper.
 - The presenter contains only script text and a compact status/audio cue. Show no camera, microphone, close, or settings buttons.
 - Preserve keyboard controls: Space pauses/resumes, Up/Down nudges, R restarts, plus/minus changes text size, bracket keys change panel height, and Q/Esc closes.
 - Preserve local speech following and script persistence. Open Notch uses the microphone for voice following and never accesses the camera.

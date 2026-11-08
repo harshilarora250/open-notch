@@ -3,7 +3,7 @@
 Open Notch has two separate Python apps:
 
 - `notch.py` opens the titled script library. Create and edit scripts, then launch one in the floating presenter.
-- `prompter.py` runs as a separate, frameless presenter process. Closing the library does not close an already launched presenter.
+- `prompter.py` runs as a separate, frameless presenter process. Quitting the library closes its launched presenter and speech helper.
 
 Notes are stored locally at `~/Library/Application Support/Open Notch/notes.json`.
 
@@ -35,6 +35,5 @@ The presenter still opens borderlessly without PyObjC; native corner masking and
 
 ## Presenter controls
 
-- Click the microphone icon or press **Space** to pause/resume script following.
-- Use the settings icon to change text size, panel height, or script position.
-- **R** restarts the script; **Up/Down** nudge the position; **+/−** change text size; **Q/Esc** closes the presenter.
+- **Space** pauses/resumes script following.
+- **R** restarts the script; **Up/Down** nudge the position; **+/−** change text size; **[ / ]** change panel height; **Q/Esc** closes the presenter.
