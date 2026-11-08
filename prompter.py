@@ -4,6 +4,7 @@
 import argparse
 import difflib
 import json
+import math
 import queue
 import re
 import shutil
@@ -185,15 +186,15 @@ class Prompter:
         self.root.configure(bg=BG)
         self.root.attributes("-topmost", True)
         self.root.attributes("-alpha", 0.96)
-        self.width, self.height = args.width, args.height
+        self._build_ui(script)
         screen_width = self.root.winfo_screenwidth()
+        self.screen_height = self.root.winfo_screenheight()
+        self.width, self.height = self._fit_geometry(script)
         self.x = (screen_width - self.width) // 2
         if args.animate:
             self.root.geometry(f"260x60+{(screen_width - 260) // 2}+8")
         else:
             self.root.geometry(f"{self.width}x{self.height}+{self.x}+8")
-
-        self._build_ui(script)
         self.root.protocol("WM_DELETE_WINDOW", self.close)
         for key, handler in {
             "<space>": self.toggle_following,
@@ -248,6 +249,30 @@ class Prompter:
         for widget in (self.root, self.text, footer, self.status, self.activity):
             widget.bind("<ButtonPress-1>", self._drag_start, add="+")
             widget.bind("<B1-Motion>", self._drag_move, add="+")
+
+    def _fit_geometry(self, script):
+        screen_width = self.root.winfo_screenwidth()
+        width_limit = max(320, min(self.args.width, screen_width - 40))
+        min_width = min(520, width_limit)
+        natural_text_width = max(
+            (self.font.measure(line) for line in script.splitlines()), default=0,
+        )
+        width = min(width_limit, max(min_width, natural_text_width + 96))
+
+        screen_height = self.root.winfo_screenheight()
+        height_limit = max(160, int(screen_height * 0.52))
+        if self.args.height is not None:
+            return width, min(height_limit, max(140, self.args.height))
+
+        text_width = max(120, width - 88)
+        visual_lines = sum(
+            max(1, math.ceil(self.font.measure(line) / text_width))
+            for line in script.splitlines()
+        )
+        visual_lines = max(1, visual_lines)
+        line_height = self.font.metrics("linespace") + 12
+        desired_height = visual_lines * line_height + 68
+        return width, min(height_limit, max(140, desired_height))
 
     def _load_script(self, script):
         self.text.configure(state="normal")
@@ -338,7 +363,7 @@ class Prompter:
         self._render()
 
     def _resize_panel(self, delta):
-        self.height = max(150, min(360, self.height + delta))
+        self.height = max(140, min(int(self.screen_height * 0.72), self.height + delta))
         self.root.geometry(f"{self.width}x{self.height}+{self.x}+8")
         self._style_native_surface()
 
@@ -426,8 +451,10 @@ def main():
     parser.add_argument("-c", "--clipboard", action="store_true")
     parser.add_argument("--lang", default="en-US")
     parser.add_argument("--size", type=int, default=27)
-    parser.add_argument("--width", type=int, default=720)
-    parser.add_argument("--height", type=int, default=210)
+    parser.add_argument("--width", type=int, default=900,
+                        help="maximum presenter width; actual width adapts to the script")
+    parser.add_argument("--height", type=int, default=None,
+                        help="fixed presenter height; defaults to a script-fitted height")
     parser.add_argument("--no-animate", dest="animate", action="store_false")
     parser.set_defaults(animate=True)
     args = parser.parse_args()

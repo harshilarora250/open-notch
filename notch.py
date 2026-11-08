@@ -29,8 +29,8 @@ class NotchHome:
         self.args = args
         self.root = tk.Tk()
         self.root.title("Open Notch")
-        self.root.geometry("1060x720")
-        self.root.minsize(860, 580)
+        self.root.geometry("1180x760")
+        self.root.minsize(930, 600)
         self.root.configure(bg=BG)
         self.root.protocol("WM_DELETE_WINDOW", self.close)
         self.root.bind("<Command-q>", self.close)
@@ -62,77 +62,115 @@ class NotchHome:
 
     def _build_ui(self):
         shell = tk.Frame(self.root, bg=BG)
-        shell.pack(fill="both", expand=True, padx=28, pady=26)
+        shell.pack(fill="both", expand=True, padx=18, pady=18)
 
-        sidebar = tk.Frame(shell, bg=SIDEBAR, width=238)
+        sidebar = tk.Frame(shell, bg=SIDEBAR, width=176)
         sidebar.pack(side="left", fill="y")
         sidebar.pack_propagate(False)
         tk.Label(
-            sidebar, text="OPEN NOTCH", bg=SIDEBAR, fg="#F2F6F6",
-            font=("Avenir Next", 13, "bold"), anchor="w",
-        ).pack(fill="x", padx=20, pady=(24, 5))
+            sidebar, text="OPEN\nNOTCH", bg=SIDEBAR, fg="#F2F6F6",
+            font=("Avenir Next", 16, "bold"), anchor="w", justify="left",
+        ).pack(fill="x", padx=22, pady=(27, 7))
         tk.Label(
-            sidebar, text="Presentation scripts", bg=SIDEBAR, fg=MUTED,
-            font=("Avenir Next", 10), anchor="w",
-        ).pack(fill="x", padx=20, pady=(0, 22))
-        self._button(sidebar, "+  New script", self.new_note, primary=True).pack(
-            fill="x", padx=14, pady=(0, 24),
+            sidebar, text="SPEAK WITH CLARITY", bg=SIDEBAR, fg=MUTED,
+            font=("Avenir Next", 8), anchor="w",
+        ).pack(fill="x", padx=22, pady=(0, 31))
+        tk.Label(
+            sidebar, text="●   Scripts", bg="#1A2633", fg="#DCEBFA",
+            font=("Avenir Next", 11, "bold"), anchor="w", padx=13, pady=11,
+        ).pack(fill="x", padx=11)
+        tk.Label(
+            sidebar, text="LOCAL LIBRARY", bg=SIDEBAR, fg="#737D87",
+            font=("Avenir Next", 8, "bold"), anchor="w",
+        ).pack(side="bottom", fill="x", padx=22, pady=(0, 7))
+        tk.Label(
+            sidebar, text="Saved on this Mac", bg=SIDEBAR, fg=MUTED,
+            font=("Avenir Next", 9), anchor="w",
+        ).pack(side="bottom", fill="x", padx=22, pady=(0, 23))
+
+        browser = tk.Frame(shell, bg="#0E1116", width=276)
+        browser.pack(side="left", fill="y", padx=(1, 0))
+        browser.pack_propagate(False)
+        browser_header = tk.Frame(browser, bg="#0E1116")
+        browser_header.pack(fill="x", padx=18, pady=(27, 17))
+        tk.Label(
+            browser_header, text="Scripts", bg="#0E1116", fg="#F2F6F6",
+            font=("Avenir Next", 18, "bold"), anchor="w",
+        ).pack(side="left", fill="x", expand=True)
+        self.note_count = tk.Label(
+            browser_header, text="0", bg="#18212B", fg=MUTED,
+            font=("Helvetica Neue", 9), padx=8, pady=4,
         )
-        tk.Frame(sidebar, bg="#262C34", height=1).pack(fill="x", padx=16, pady=(0, 19))
+        self.note_count.pack(side="left", padx=(8, 0))
+        self._button(browser_header, "+", self.new_note, primary=True).pack(
+            side="right", padx=(8, 0),
+        )
+
+        search_shell = tk.Frame(
+            browser, bg="#171C23", highlightthickness=1,
+            highlightbackground="#242B34",
+        )
+        search_shell.pack(fill="x", padx=14, pady=(0, 15))
         tk.Label(
-            sidebar, text="LIBRARY", bg=SIDEBAR, fg="#737D87",
-            font=("Avenir Next", 9, "bold"), anchor="w",
-        ).pack(fill="x", padx=20, pady=(0, 9))
+            search_shell, text="Search", bg="#171C23", fg=MUTED,
+            font=("Helvetica Neue", 10),
+        ).pack(side="left", padx=(11, 5), pady=9)
+        self.search_var = tk.StringVar()
+        search_entry = tk.Entry(
+            search_shell, textvariable=self.search_var, bg="#171C23", fg="#E5E8EB",
+            insertbackground="#FFFFFF", relief="flat", bd=0,
+            font=("Avenir Next", 10),
+        )
+        search_entry.pack(side="left", fill="x", expand=True, padx=(0, 10), pady=9)
+        self.search_var.trace_add("write", lambda *_: self._refresh_notes(self.selected_id))
+
         self.note_list = tk.Listbox(
-            sidebar, bg=SIDEBAR, fg="#D8DDE1", selectbackground="#263B4D",
+            browser, bg="#0E1116", fg="#D8DDE1", selectbackground="#1E3449",
             selectforeground="#FFFFFF", activestyle="none", relief="flat",
-            borderwidth=0, highlightthickness=0, font=("Avenir Next", 12),
+            borderwidth=0, highlightthickness=0, font=("Avenir Next", 11),
             exportselection=False,
         )
-        self.note_list.pack(fill="both", expand=True, padx=10, pady=(0, 12))
+        self.note_list.pack(side="left", fill="both", expand=True, padx=(9, 0), pady=(0, 12))
+        self.note_scrollbar = tk.Scrollbar(
+            browser, orient="vertical", command=self.note_list.yview,
+            bg="#0E1116", troughcolor="#0E1116", activebackground="#303B48",
+            highlightthickness=0, bd=0, relief="flat",
+        )
+        self.note_list.configure(yscrollcommand=self.note_scrollbar.set)
+        self.note_scrollbar.pack(side="right", fill="y", padx=(0, 7), pady=(0, 12))
         self.note_list.bind("<<ListboxSelect>>", self._on_select)
 
         content = tk.Frame(shell, bg=BG)
-        content.pack(side="left", fill="both", expand=True, padx=(30, 0))
+        content.pack(side="left", fill="both", expand=True, padx=(25, 15))
         header = tk.Frame(content, bg=BG)
-        header.pack(fill="x", pady=(3, 23))
-        title_group = tk.Frame(header, bg=BG)
-        title_group.pack(side="left", fill="x", expand=True)
-        tk.Label(
-            title_group, text="Script library", bg=BG, fg="#F2F6F6",
-            font=("Avenir Next", 28, "bold"), anchor="w",
-        ).pack(fill="x")
-        tk.Label(
-            title_group, text="A quiet place to shape what you want to say.",
-            bg=BG, fg=MUTED, font=("Avenir Next", 11), anchor="w",
-        ).pack(fill="x", pady=(5, 0))
-        self.launch_button = self._button(
-            header, "Launch presenter  →", self.launch, primary=True,
+        header.pack(fill="x", pady=(9, 20))
+        title_shell = tk.Frame(
+            header, bg="#11151A", highlightthickness=1,
+            highlightbackground="#252B33",
         )
-        self.launch_button.pack(side="right", padx=(16, 0), pady=(12, 0))
+        title_shell.pack(side="left", fill="x", expand=True)
+        self.title_var = tk.StringVar()
+        self.title_entry = tk.Entry(
+            title_shell, textvariable=self.title_var, bg="#11151A", fg="#F2F6F6",
+            insertbackground="#FFFFFF", relief="flat", bd=0,
+            font=("Avenir Next", 17, "bold"),
+        )
+        self.title_entry.pack(fill="x", padx=16, pady=12)
+        self.launch_button = self._button(
+            header, "Present  →", self.launch, primary=True,
+        )
+        self.launch_button.pack(side="right", padx=(12, 0))
 
         editor = tk.Frame(
             content, bg=PANEL, highlightthickness=1,
             highlightbackground="#252B33",
         )
         editor.pack(fill="both", expand=True)
-        tk.Label(
-            editor, text="TITLE", bg=PANEL, fg=MUTED,
-            font=("Avenir Next", 9, "bold"), anchor="w",
-        ).pack(fill="x", padx=26, pady=(23, 8))
-        self.title_var = tk.StringVar()
-        self.title_entry = tk.Entry(
-            editor, textvariable=self.title_var, bg=PANEL, fg="#F2F6F6",
-            insertbackground="#FFFFFF", relief="flat", bd=0,
-            font=("Avenir Next", 18, "bold"),
-        )
-        self.title_entry.pack(fill="x", padx=26, pady=(0, 19))
-        tk.Frame(editor, bg="#292F35", height=1).pack(fill="x", padx=26)
         script_header = tk.Frame(editor, bg=PANEL)
-        script_header.pack(fill="x", padx=26, pady=(17, 2))
+        script_header.pack(fill="x", padx=24, pady=(19, 6))
         tk.Label(
-            script_header, text="SCRIPT", bg=PANEL, fg=MUTED,
-            font=("Avenir Next", 9, "bold"), anchor="w",
+            script_header, text="SCRIPT CONTENT", bg=PANEL, fg="#E4E8ED",
+            font=("Avenir Next", 11, "bold"), anchor="w",
         ).pack(side="left")
         self.editor_count = tk.Label(
             script_header, text="0 words", bg=PANEL, fg=MUTED,
@@ -143,19 +181,19 @@ class NotchHome:
             editor, wrap="word", bg=PANEL, fg="#E7EAED",
             insertbackground="#FFFFFF", selectbackground="#31526A",
             relief="flat", bd=0, highlightthickness=0,
-            font=("Avenir Next", 14), padx=26, pady=15, spacing1=5,
+            font=("Avenir Next", 14), padx=24, pady=17, spacing1=5,
         )
         self.body.pack(fill="both", expand=True)
         self.body.bind("<KeyRelease>", self._update_count)
 
         footer = tk.Frame(content, bg=BG)
-        footer.pack(fill="x", pady=(15, 0))
+        footer.pack(fill="x", pady=(12, 0))
         self.status = tk.Label(
             footer, text="Saved locally", bg=BG, fg=MUTED,
             font=("Avenir Next", 10),
         )
         self.status.pack(side="left", fill="x", expand=True)
-        self.delete_button = self._button(footer, "Delete", self.delete_note)
+        self.delete_button = self._button(footer, "Delete script", self.delete_note)
         self.delete_button.pack(side="right", padx=(8, 0))
         self.save_button = self._button(footer, "Save", self.save_current)
         self.save_button.pack(side="right")
@@ -181,13 +219,22 @@ class NotchHome:
         self.launch_button.configure(state=state)
 
     def _refresh_notes(self, selected_id=None):
+        self._refreshing_notes = True
+        query = self.search_var.get().strip().casefold() if hasattr(self, "search_var") else ""
+        self.visible_notes = [
+            note for note in self.store.notes
+            if not query or query in note["title"].casefold() or query in note["body"].casefold()
+        ]
         self.note_list.delete(0, "end")
-        for note in self.store.notes:
+        for note in self.visible_notes:
             self.note_list.insert("end", note["title"].strip() or "Untitled script")
             if note["id"] == selected_id:
                 row = self.note_list.size() - 1
                 self.note_list.selection_set(row)
                 self.note_list.activate(row)
+        if hasattr(self, "note_count"):
+            self.note_count.configure(text=str(len(self.store.notes)))
+        self._refreshing_notes = False
 
     def _select_id(self, note_id):
         note = self.store.get(note_id)
@@ -204,10 +251,12 @@ class NotchHome:
         self._update_count()
 
     def _on_select(self, _event=None):
-        selected = self.note_list.curselection()
-        if not selected:
+        if getattr(self, "_refreshing_notes", False):
             return
-        note = self.store.notes[selected[0]]
+        selected = self.note_list.curselection()
+        if not selected or selected[0] >= len(self.visible_notes):
+            return
+        note = self.visible_notes[selected[0]]
         if note["id"] != self.selected_id:
             self._save_current(silent=True)
             self._select_id(note["id"])
@@ -234,6 +283,7 @@ class NotchHome:
 
     def new_note(self):
         self._save_current(silent=True)
+        self.search_var.set("")
         note = self.store.create()
         self._refresh_notes(note["id"])
         self._select_id(note["id"])
@@ -250,6 +300,7 @@ class NotchHome:
             return
         self.store.delete(note["id"])
         self.selected_id = None
+        self.search_var.set("")
         if self.store.notes:
             self._select_id(self.store.notes[0]["id"])
         else:

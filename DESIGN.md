@@ -9,9 +9,11 @@ Open Notch has two separate Python apps:
 
 The library is a quiet dark workspace. The presenter is a black, blue-lit capsule: long, spare, and readable at a glance. It should feel native to Open Notch instead of looking like a reskinned reference mockup.
 
-## Originality rule
+## Reference for this pass
 
-Treat supplied images as mood cues only. Never copy their exact layout, proportions, icon placement, or component cluster. In particular, the presenter must not reproduce the close/camera/microphone/settings row from the references. Open Notch's presenter uses no visible buttons; keyboard controls and a small status line provide its controls.
+The user explicitly selected the scripts-and-editor reference as the library UI target. Follow its three-part hierarchy: a slim navigation rail, a searchable script list, and a focused editor with the launch action near the title. Adapt the colors and controls to Open Notch; do not add recording, profile, copy, camera, or other features that do not exist. This is an explicit exception to the default originality rule in `AGENTS.md`.
+
+The floating presenter remains its own minimal, text-first surface and should not inherit the library's navigation or toolbar.
 
 ## Palette
 
@@ -42,11 +44,12 @@ Keep the blue restrained: it marks the active word, voice-following state, and a
 
 ## Layout and behavior
 
-- Keep the library's title bar, two-column script/editor layout, and clear launch action. Give the editor deliberate spacing and a clear title/script hierarchy.
+- Keep the library's native title bar. Use the three-part navigation, searchable script list, and editor hierarchy described above, with deliberate spacing and a clear launch action.
 - Keep the presenter topmost, draggable, and separate from the library process. Quitting the library closes its launched presenter and speech helper.
 - The presenter contains only script text and a compact status/audio cue. Show no camera, microphone, close, or settings buttons.
 - Preserve keyboard controls: Space pauses/resumes, Up/Down nudges, R restarts, plus/minus changes text size, bracket keys change panel height, and Q/Esc closes.
 - Preserve local speech following and script persistence. Open Notch uses the microphone for voice following and never accesses the camera.
+- Fit the presenter's width and height to the script's rendered text, within screen-aware minimum and maximum bounds. Short scripts use a compact capsule; long scripts expand until the cap and remain scrollable.
 - Retain the short ease-out expansion from a compact pill into the reading capsule.
 
 ## Resilience
